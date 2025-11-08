@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from db.base import Base
 import uuid
+from sqlalchemy.sql import func
 
 def generate_uuid():
     return str(uuid.uuid4())
@@ -10,8 +11,20 @@ def generate_uuid():
 class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True, default=generate_uuid)
-    email = Column(String, nullable=False)
+    email = Column(String, unique=True)
+    hashed_password = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    tokens = relationship("Token", back_populates="user")
     threads = relationship("Thread", back_populates="user")
+
+
+class Token(Base):
+    __tablename__ = "tokens"
+    token = Column(String, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="tokens")
 
 class Thread(Base):
     __tablename__ = "threads"
