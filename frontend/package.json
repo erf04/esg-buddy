@@ -12,6 +12,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
     "vue": "^3.5.22",
     "vue-bot-ui": "^0.2.11"
   },

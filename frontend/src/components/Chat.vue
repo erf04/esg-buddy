@@ -1,7 +1,7 @@
 <template>
   <div class="chat-wrapper">
     <header class="chat-header">
-      <h1>💬 ESG Buddy</h1>
+      <h1>💬 Cariboun AI</h1>
     </header>
 
     <main class="chat-body" ref="chatWindow">
@@ -33,6 +33,9 @@
 </template>
 
 <script>
+import axios from 'axios';
+
+import api from '../plugins/axios'
 export default {
   name: "EsgBuddy",
 
@@ -45,7 +48,9 @@ export default {
   },
 
   mounted() {
-    this.loadMessages();
+    
+    console.log(this.loadMessages());
+    
   },
 
   methods: {
@@ -54,13 +59,30 @@ export default {
       this.messages = [
         {
           role: "assistant",
-          text: "👋 Hello! I'm ESG Buddy — your AI assistant for sustainability and ESG insights. How can I help today?",
+          text: "👋 Hello! I'm Cariboun AI — your AI assistant for sustainability and Cariboun AI insights. How can I help today?",
         },
-        {
-            role: "user",
-            text: "What is ESG?"
-        }
+        // {
+        //     role: "user",
+        //     text: "What is Cariboun AI?"
+        // }
       ];
+
+      axios.get("http://localhost:8000/chat/messages/1/")
+        .then(response => {
+          console.log(response.status);
+          console.log(response.data);
+          
+          for (const msg of response.data) {
+            if (msg !== "" && msg !== null && msg !== undefined) {
+              this.messages.push(msg);
+              // console.log(this.messages);
+              
+            }
+          }
+        })
+        .catch(error => {
+          console.error("Error loading messages:", error);
+        });
     },
 
     async handleSend() {
@@ -77,15 +99,32 @@ export default {
       this.scrollToBottom();
 
       // Simulate backend delay
-      setTimeout(() => {
+      // setTimeout(() => {
+      //   const reply = {
+      //     role: "assistant",
+      //     text: "This is a sample response from Cariboun AI! 🌿",
+      //   };
+      //   this.messages.push(reply);
+      //   this.loading = false;
+      //   this.scrollToBottom();
+      // }, 1000);
+      api.post("http://localhost:8000/chat/send-message/", {
+        message: this.userInput.trim()
+      })
+      .then(response => {
         const reply = {
           role: "assistant",
-          text: "This is a sample response from ESG Buddy! 🌿",
+          text: response.data.reply
         };
         this.messages.push(reply);
+      })
+      .catch(error => {
+        console.error("Error sending message:", error);
+      })
+      .finally(() => {
         this.loading = false;
         this.scrollToBottom();
-      }, 1000);
+      });
     },
 
     scrollToBottom() {
