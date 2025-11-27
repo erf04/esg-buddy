@@ -22,7 +22,9 @@ async def send_message(payload: MessageIn,
     # 🔹 Find or create user
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
+    print(payload.content)
+    if payload.content is "":
+        raise HTTPException(status_code=400, detail="payload is not ok")
     # 🔹 Find existing thread or create new one
     result = await db.execute(
         select(Thread).where(Thread.user_id == user.id).limit(1)
@@ -53,13 +55,14 @@ async def send_message(payload: MessageIn,
     return MessageOut(role="assistant", content=reply_text, thread_id=thread_id, created_at=assistant_msg.created_at.isoformat())
 
 
-@router.get("/messages/{user_id}")
-async def get_messages(user_id: str, db: AsyncSession = Depends(get_session)):
+@router.get("/messages/")
+async def get_messages(db: AsyncSession = Depends(get_session),
+                       user:User = Depends(get_current_user)):
     # 🔹 Find user and load messages with thread relationship
     result = await db.execute(
         select(Thread)
         .options(selectinload(Thread.messages))
-        .where(Thread.user_id == user_id)
+        .where(Thread.user_id == user.id)
     )
     thread = result.scalar_one_or_none()
 

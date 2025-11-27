@@ -43,4 +43,8 @@ class OpenAIService:
             order="desc", limit=1, thread_id=thread_id
         )
 
-        return messages[-1].content[0].text.value if messages else "No response found"
+        if not messages.data:
+            return "No response found"
+
+        latest = messages.data[0]
+        return latest.content[0].text.value

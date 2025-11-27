@@ -5,6 +5,7 @@ from sqlalchemy.future import select
 from passlib.context import CryptContext
 from db.base import get_session
 from db.models import User, Token
+from sqlalchemy.orm import selectinload
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -29,7 +30,11 @@ async def get_current_user(
         )
 
     token_str = authorization.split(" ")[1]
-    result = await db.execute(select(Token).where(Token.token == token_str))
+    result = await db.execute(
+        select(Token)
+        .where(Token.token == token_str)
+        .options(selectinload(Token.user))
+    )
     token_obj = result.scalar_one_or_none()
 
     if not token_obj or not token_obj.user:

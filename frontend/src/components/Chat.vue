@@ -2,6 +2,7 @@
   <div class="chat-wrapper">
     <header class="chat-header">
       <h1>💬 Cariboun AI</h1>
+      <button @click="logout" class="logout-btn">Logout</button>
     </header>
 
     <main class="chat-body" ref="chatWindow">
@@ -11,7 +12,7 @@
         :class="['message', msg.role]"
       >
         <div class="bubble">
-          <p>{{ msg.text }}</p>
+          <p>{{ msg.content }}</p>
         </div>
       </div>
 
@@ -33,64 +34,73 @@
 </template>
 
 <script>
-import axios from 'axios';
+import { useAuthStore } from '@/stores/auth';
+import apiClient from '@/plugins/axios';
 
-import api from '../plugins/axios'
 export default {
-  name: "EsgBuddy",
-
+  name: "Chat",
+  setup() {
+    const authStore = useAuthStore();
+    return { authStore };
+  },
   data() {
     return {
       messages: [],
       userInput: "",
       loading: false,
+
     };
   },
-
   mounted() {
-    
-    console.log(this.loadMessages());
-    
+    this.loadMessages();
   },
-
   methods: {
     async loadMessages() {
+      this.loading = true;
+      
       // Placeholder for backend load
       this.messages = [
         {
           role: "assistant",
-          text: "👋 Hello! I'm Cariboun AI — your AI assistant for sustainability and Cariboun AI insights. How can I help today?",
+          content: "👋 Hello! I'm Cariboun AI — your AI assistant for sustainability and Cariboun AI insights. How can I help today?",
         },
-        // {
-        //     role: "user",
-        //     text: "What is Cariboun AI?"
-        // }
       ];
 
-      axios.get("http://localhost:8000/chat/messages/1/")
-        .then(response => {
-          console.log(response.status);
-          console.log(response.data);
-          
-          for (const msg of response.data) {
-            if (msg !== "" && msg !== null && msg !== undefined) {
-              this.messages.push(msg);
-              // console.log(this.messages);
-              
+      try {
+        const response = await apiClient.get('/chat/messages/',
+          {
+            headers:{
+              Authorization:`Bearer ${this.authStore.token}`
             }
           }
-        })
-        .catch(error => {
-          console.error("Error loading messages:", error);
-        });
+        );
+        console.log(response.status);
+        console.log(response.data);
+        
+        for (const msg of response.data) {
+          if (msg && msg.content) {
+            this.messages.push(msg);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading messages:", error);
+        if (error.response?.status === 401) {
+          this.authStore.logout();
+          this.$router.push('/login');
+        }
+      } finally {
+        this.loading = false;
+        this.scrollToBottom();
+      }
     },
 
     async handleSend() {
       if (!this.userInput.trim()) return;
 
+      const content = this.userInput.trim();
       const userMessage = {
         role: "user",
-        text: this.userInput.trim(),
+        content: content,
       };
 
       this.messages.push(userMessage);
@@ -98,33 +108,36 @@ export default {
       this.loading = true;
       this.scrollToBottom();
 
-      // Simulate backend delay
-      // setTimeout(() => {
-      //   const reply = {
-      //     role: "assistant",
-      //     text: "This is a sample response from Cariboun AI! 🌿",
-      //   };
-      //   this.messages.push(reply);
-      //   this.loading = false;
-      //   this.scrollToBottom();
-      // }, 1000);
-      api.post("http://localhost:8000/chat/send-message/", {
-        message: this.userInput.trim()
-      })
-      .then(response => {
+      try {
+        const response = await apiClient.post("/chat/send-message/", {
+          content: content
+        },
+        {
+          headers:{
+              Authorization:`Bearer ${this.authStore.token}`
+            }
+        });
+        
         const reply = {
           role: "assistant",
-          text: response.data.reply
+          content: response.data.content
         };
         this.messages.push(reply);
-      })
-      .catch(error => {
+      } catch (error) {
         console.error("Error sending message:", error);
-      })
-      .finally(() => {
+        if (error.response?.status === 401) {
+          this.authStore.logout();
+          this.$router.push('/login');
+        }
+      } finally {
         this.loading = false;
         this.scrollToBottom();
-      });
+      }
+    },
+
+    logout() {
+      this.authStore.logout();
+      this.$router.push('/login');
     },
 
     scrollToBottom() {
@@ -160,6 +173,23 @@ export default {
   font-size: 1.3rem;
   font-weight: 600;
   letter-spacing: 0.5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logout-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
 }
 
 /* Chat body */
@@ -312,4 +342,3 @@ export default {
   }
 }
 </style>
-    

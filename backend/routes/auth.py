@@ -48,4 +48,4 @@ async def login(data: LoginIn, db: AsyncSession = Depends(get_session)):
     db.add(token)
     await db.commit()
 
-    return {"token": token_str}
+    return {"token": token_str,"user":user.id}

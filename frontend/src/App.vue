@@ -1,10 +1,7 @@
-<script setup>
-import Chat from "./components/Chat.vue";
-</script>
-
 <template>
-  <Chat />
+  <router-view></router-view>
 </template>
 
-<style>
-</style>
+<script>
+export default {};
+</script>
