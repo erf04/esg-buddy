@@ -62,13 +62,13 @@
           <div class="toggle-buttons">
             <button 
               :class="['toggle-btn', { 'active': !isLogin }]" 
-              @click="isLogin = false"
+              @click="toggleMode(false)"
             >
               Sign Up
             </button>
             <button 
               :class="['toggle-btn', { 'active': isLogin }]" 
-              @click="isLogin = true"
+              @click="toggleMode(true)"
             >
               Login
             </button>
@@ -149,20 +149,16 @@
             <div class="input-decoration"></div>
           </div>
 
-          <!-- Terms Agreement for Signup -->
-          <!-- <div v-if="!isLogin" class="terms-agreement">
-            <label class="checkbox-container">
-              <input type="checkbox" v-model="agreeTerms" />
-              <span class="checkmark"></span>
-              <span class="checkbox-label">I agree to the <a href="#" class="terms-link">Terms & Conditions</a></span>
-            </label>
-          </div> -->
+          <!-- Forgot Password for Login -->
+          <div v-if="isLogin" class="forgot-password">
+            <a href="#" class="forgot-link">Forgot Password?</a>
+          </div>
 
           <!-- Submit Button -->
           <button 
             type="button" 
             class="submit-btn"
-            :disabled="loading || (!isLogin && !agreeTerms)"
+            :disabled="loading"
             @click="handleSubmit"
           >
             <span v-if="loading" class="spinner"></span>
@@ -175,116 +171,218 @@
             </span>
           </button>
 
-          <!-- Divider -->
-          <!-- <div class="divider">
-            <span class="divider-text">or continue with</span>
-          </div> -->
-
-          <!-- Social Login -->
-          <!-- <div class="social-login">
-            <button class="social-btn google" @click="socialLogin('google')">
-              <svg class="social-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              </svg>
-              <span>Google</span>
-            </button>
-            <button class="social-btn facebook" @click="socialLogin('facebook')">
-              <svg class="social-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-              </svg>
-              <span>Facebook</span>
-            </button>
-          </div> -->
-
           <!-- Switch Mode -->
           <div class="switch-mode">
             <span>{{ isLogin ? "Don't have an account?" : "Already have an account?" }}</span>
-            <button class="switch-link" @click="toggleMode">
+            <button class="switch-link" @click="toggleMode(!isLogin)">
               {{ isLogin ? "Sign up" : "Log in" }}
             </button>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" :class="{ 'show': showToast }">
+      <div class="toast" :class="toastType">
+        <div class="toast-icon">
+          <svg v-if="toastType === 'success'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          <svg v-else-if="toastType === 'error'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </div>
+        <div class="toast-content">
+          <div class="toast-title">{{ toastTitle }}</div>
+          <div class="toast-message">{{ toastMessage }}</div>
+        </div>
+        <button class="toast-close" @click="hideToast">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { useAuthStore } from '@/stores/auth';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from "vue-router";
-import { onMounted } from 'vue';
+import { useAuthStore } from '@/stores/auth';
 
 export default {
   name: "LoginSignup",
   setup() {
-    const authStore = useAuthStore();
     const router = useRouter();
+    const authStore = useAuthStore();
+    
+    const isLogin = ref(true);
+    const firstName = ref("");
+    const lastName = ref("");
+    const email = ref("");
+    const password = ref("");
+    const showPassword = ref(false);
+    const loading = ref(false);
+    
+    // Toast state
+    const showToast = ref(false);
+    const toastType = ref("info");
+    const toastTitle = ref("");
+    const toastMessage = ref("");
+    const toastTimeout = ref(null);
+    
+    const features = [
+      "Smart AI Conversations",
+      "Real-time Processing",
+      "Secure & Private",
+      "Multi-language Support"
+    ];
 
     onMounted(() => {
       document.body.style.overflow = 'hidden';
     });
 
-    return { authStore, router };
-  },
-  data() {
-    return {
-      isLogin: false,
-      firstName: "",
-      lastName: "",
-      email: "",
-      password: "",
-      showPassword: false,
-      agreeTerms: false,
-      loading: false,
-      features: [
-        "Smart AI Conversations",
-        "Real-time Processing",
-        "Secure & Private",
-        "Multi-language Support"
-      ]
+    onUnmounted(() => {
+      document.body.style.overflow = '';
+      if (toastTimeout.value) {
+        clearTimeout(toastTimeout.value);
+      }
+    });
+
+    const showToastMessage = (type, title, message, duration = 5000) => {
+      // Clear any existing timeout
+      if (toastTimeout.value) {
+        clearTimeout(toastTimeout.value);
+        toastTimeout.value = null;
+      }
+      
+      // Set toast data
+      toastType.value = type;
+      toastTitle.value = title;
+      toastMessage.value = message;
+      showToast.value = true;
+      
+      // Auto hide after duration
+      toastTimeout.value = setTimeout(() => {
+        hideToast();
+      }, duration);
     };
-  },
-  methods: {
-    animateInput(fieldName) {
-      console.log(`Focusing on ${fieldName}`);
-    },
+
+    const hideToast = () => {
+      showToast.value = false;
+      if (toastTimeout.value) {
+        clearTimeout(toastTimeout.value);
+        toastTimeout.value = null;
+      }
+    };
+
+    const toggleMode = (loginMode) => {
+      isLogin.value = loginMode;
+      resetForm();
+      showToastMessage("info", 
+        loginMode ? "Login Mode" : "Sign Up Mode", 
+        loginMode ? "Enter your credentials to sign in" : "Fill in your details to create an account",
+        3000
+      );
+    };
     
-    toggleMode() {
-      this.isLogin = !this.isLogin;
-      this.resetForm();
-    },
+    const resetForm = () => {
+      firstName.value = "";
+      lastName.value = "";
+      email.value = "";
+      password.value = "";
+      showPassword.value = false;
+    };
     
-    resetForm() {
-      this.firstName = "";
-      this.lastName = "";
-      this.email = "";
-      this.password = "";
-      this.agreeTerms = false;
-    },
+    const validateForm = () => {
+      if (!email.value || !password.value) {
+        showToastMessage("error", "Missing Information", "Please fill in all required fields");
+        return false;
+      }
+      
+      if (!isLogin.value && (!firstName.value || !lastName.value)) {
+        showToastMessage("error", "Missing Information", "Please enter your first and last name");
+        return false;
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.value)) {
+        showToastMessage("error", "Invalid Email", "Please enter a valid email address");
+        return false;
+      }
+      
+      // if (password.value.length < 6) {
+      //   showToastMessage("error", "Weak Password", "Password must be at least 6 characters long");
+      //   return false;
+      // }
+      
+      return true;
+    };
     
-    async handleSubmit() {
-      this.loading = true;
+    const handleSubmit = async () => {
+      if (!validateForm()) {
+        return;
+      }
+      
+      loading.value = true;
       
       try {
-        if (this.isLogin) {
-          await this.authStore.login(this.email, this.password);
-          this.router.push('/chat');
+        if (isLogin.value) {
+          // Login logic
+          await authStore.login(email.value, password.value);
+          showToastMessage("success", "Login Successful", "Welcome back! Redirecting...", 2000);
+          setTimeout(() => {
+            router.push('/chat');
+          }, 2000);
         } else {
-          await this.authStore.signup(this.email, this.password);
-          this.isLogin = true;
-          this.resetForm();
+          // Signup logic
+          await authStore.signup(firstName.value, lastName.value,email.value, password.value);
+          showToastMessage("success", "Account Created", "Your account has been created successfully!", 3000);
+          setTimeout(() => {
+            isLogin.value = true;
+            resetForm();
+          }, 1000);
         }
       } catch (error) {
         console.error('Auth error:', error);
+        const errorMessage = error.response?.data?.message || error.message || "An error occurred. Please try again.";
+        showToastMessage("error", 
+          isLogin.value ? "Login Failed" : "Signup Failed", 
+          errorMessage
+        );
       } finally {
-        this.loading = false;
+        loading.value = false;
       }
-    },
-    
-    socialLogin(provider) {
-      console.log(`Social login with ${provider}`);
-      // Implement social login logic here
-    }
+    };
+
+    return {
+      isLogin,
+      firstName,
+      lastName,
+      email,
+      password,
+      showPassword,
+      loading,
+      features,
+      showToast,
+      toastType,
+      toastTitle,
+      toastMessage,
+      toggleMode,
+      handleSubmit,
+      hideToast
+    };
   }
 };
 </script>
@@ -798,71 +896,21 @@ export default {
   color: #10b981;
 }
 
-.terms-agreement {
+.forgot-password {
+  text-align: right;
   margin-top: -8px;
 }
 
-.checkbox-container {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
+.forgot-link {
+  color: #10b981;
+  text-decoration: none;
   font-size: 14px;
-  color: #64748b;
-  position: relative;
-}
-
-.checkbox-container input {
-  position: absolute;
-  opacity: 0;
-  cursor: pointer;
-  height: 0;
-  width: 0;
-}
-
-.checkmark {
-  position: relative;
-  height: 20px;
-  width: 20px;
-  background-color: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 6px;
-  margin-right: 12px;
+  font-weight: 500;
   transition: all 0.3s ease;
 }
 
-.checkbox-container:hover .checkmark {
-  border-color: #10b981;
-}
-
-.checkbox-container input:checked ~ .checkmark {
-  background-color: #10b981;
-  border-color: #10b981;
-}
-
-.checkmark:after {
-  content: "";
-  position: absolute;
-  display: none;
-  left: 6px;
-  top: 2px;
-  width: 5px;
-  height: 10px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.checkbox-container input:checked ~ .checkmark:after {
-  display: block;
-}
-
-.terms-link {
-  color: #10b981;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.terms-link:hover {
+.forgot-link:hover {
+  color: #059669;
   text-decoration: underline;
 }
 
@@ -928,69 +976,6 @@ export default {
   100% { transform: rotate(360deg); }
 }
 
-.divider {
-  display: flex;
-  align-items: center;
-  margin: 16px 0;
-  color: #94a3b8;
-  font-size: 14px;
-  position: relative;
-}
-
-.divider::before,
-.divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
-}
-
-.divider-text {
-  padding: 0 16px;
-  background: white;
-  z-index: 1;
-}
-
-.social-login {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.social-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 16px;
-  background: white;
-  color: #475569;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.social-btn:hover {
-  transform: translateY(-2px);
-  border-color: #10b981;
-  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.1);
-}
-
-.social-btn.google:hover {
-  color: #4285f4;
-}
-
-.social-btn.facebook:hover {
-  color: #1877f2;
-}
-
-.social-icon {
-  width: 20px;
-  height: 20px;
-}
-
 .switch-mode {
   text-align: center;
   margin-top: auto;
@@ -1015,6 +1000,122 @@ export default {
 .switch-link:hover {
   color: #059669;
   background: rgba(16, 185, 129, 0.1);
+}
+
+/* Toast Notification Styles */
+.toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 1000;
+  transform: translateX(400px);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.4s ease;
+}
+
+.toast-container.show {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  min-width: 320px;
+  max-width: 400px;
+  background: white;
+  border-left: 4px solid;
+  animation: toastSlideIn 0.3s ease;
+}
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast.success {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.toast.error {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.toast.info {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-right: 12px;
+  margin-top: 2px;
+}
+
+.toast.success .toast-icon {
+  color: #10b981;
+}
+
+.toast.error .toast-icon {
+  color: #ef4444;
+}
+
+.toast.info .toast-icon {
+  color: #3b82f6;
+}
+
+.toast-content {
+  flex: 1;
+  text-align: left;
+}
+
+.toast-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: #1e293b;
+}
+
+.toast-message {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  margin-left: 8px;
+  border-radius: 4px;
+  color: #94a3b8;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 /* Responsive Design */
@@ -1051,12 +1152,19 @@ export default {
     grid-template-columns: 1fr;
   }
   
-  .social-login {
-    grid-template-columns: 1fr;
-  }
-  
   .features-section {
     display: none;
+  }
+  
+  .toast-container {
+    right: 16px;
+    left: 16px;
+    top: 16px;
+  }
+  
+  .toast {
+    min-width: auto;
+    max-width: none;
   }
 }
 

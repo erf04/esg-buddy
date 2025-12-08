@@ -167,11 +167,10 @@ export default {
 
     async loadMessages() {
       this.loading = true;
-      
       this.messages = [
         {
           role: "assistant",
-          content: "👋 **Hello!** I'm Cariboun AI — your AI assistant for sustainability and Cariboun AI insights. \n\nHow can I help today?",
+          content: `👋 **Hello ${this.authStore.getUser?.first_name}!** I'm Cariboun AI — your AI assistant for sustainability and Cariboun AI insights. \n\nHow can I help today?`,
         },
       ];
 

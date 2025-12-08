@@ -10,8 +10,8 @@ import secrets
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 class RegisterIn(BaseModel):
-    # first_name: str
-    # last_name: str
+    first_name: str
+    last_name: str
     email: str
     password: str
 
@@ -27,7 +27,8 @@ async def register(data: RegisterIn, db: AsyncSession = Depends(get_session)):
         raise HTTPException(status_code=400, detail="Email already registered")
     print("user password",data.password)
     user = User(
-        # id=data.email,
+        first_name = data.first_name,
+        last_name=data.last_name,
         email=data.email,
         hashed_password=hash_password(data.password)
     )
@@ -50,4 +51,4 @@ async def login(data: LoginIn, db: AsyncSession = Depends(get_session)):
     db.add(token)
     await db.commit()
 
-    return {"token": token_str,"user":user.id}
+    return {"token": token_str,"user":{"id":user.id,"first_name":user.first_name}}

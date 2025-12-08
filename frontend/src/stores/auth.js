@@ -33,7 +33,7 @@ export const useAuthStore = defineStore('auth', () => {
         email,
         password
       });
-
+      
       if (response.data.token) {
         setToken(response.data.token);
         setUser(response.data.user);
