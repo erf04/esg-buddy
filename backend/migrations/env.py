@@ -7,9 +7,26 @@ from alembic import context
 
 from db.base import Base
 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
+
+# Replace async driver with sync
+sync_url = (
+    DATABASE_URL
+    .replace("+asyncpg", "")       # PostgreSQL
+    .replace("+aiosqlite", "")     # SQLite async
+    .replace("+aiomysql", "")      # MySQL async
+)
+
 config = context.config
+config.set_main_option("sqlalchemy.url", sync_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -20,7 +37,8 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = Base
+print("TABLES FROM MODELS:", Base.metadata.tables.keys())
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

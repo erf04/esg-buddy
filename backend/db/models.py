@@ -11,6 +11,8 @@ def generate_uuid():
 class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True, default=generate_uuid)
+    first_name = Column(String,nullable=True,default="Anonymous")
+    last_name = Column(String,nullable=True)
     email = Column(String, unique=True)
     hashed_password = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
