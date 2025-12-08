@@ -7,3 +7,4 @@ asyncpg
 bcrypt==4.0.1
 alembic
 psycopg2
+passlib

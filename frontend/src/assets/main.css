@@ -1,6 +1,26 @@
 @import './base.css';
 
-#app {
+/* Reset all constraints for auth pages */
+body.auth-page {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* Override #app constraints for auth */
+#app.auth-page {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: block;
+}
+
+/* Keep original styles for other pages */
+#app:not(.auth-page) {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
@@ -21,32 +41,28 @@ a,
   }
 }
 
-/* @media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
-
-  #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
-  }
-} */
-
-
-body {
+/* Original body style for non-auth pages */
+body:not(.auth-page) {
   margin: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  /* background: #f1f5f9; */
+  background: #f1f5f9;
+}
+
+/* Original #app style for non-auth pages */
+#app:not(.auth-page) {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1rem; 
 }
 
 #app {
   width: 100%;
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 1rem;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  max-width: none;
 }

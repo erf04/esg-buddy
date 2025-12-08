@@ -47,12 +47,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   };
 
-  const signup = async (email, password) => {
+  const signup = async (firstName,lastName,email, password) => {
     isLoading.value = true;
     try {
       const response = await apiClient.post('/auth/register/', {
-        email,
-        password
+        first_name:firstName,
+        last_name:lastName,
+        email:email,
+        password:password
       });
       return { success: true, data: response.data };
     } catch (error) {

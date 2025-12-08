@@ -10,8 +10,8 @@ import secrets
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 class RegisterIn(BaseModel):
-    first_name: str
-    last_name: str
+    # first_name: str
+    # last_name: str
     email: str
     password: str
 
