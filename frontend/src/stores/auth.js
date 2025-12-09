@@ -5,7 +5,7 @@ import apiClient from '@/plugins/axios';
 export const useAuthStore = defineStore('auth', () => {
   // State - using sessionStorage for persistence across reloads
   const token = ref(sessionStorage.getItem('token'));
-  const user = ref(null);
+  const user = ref(sessionStorage.getItem('user') ? JSON.parse(sessionStorage.getItem('user')) : null);
   const isLoading = ref(false);
 
   // Getters
@@ -24,6 +24,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   const setUser = (userData) => {
     user.value = userData;
+    if (userData) {
+      sessionStorage.setItem('user', JSON.stringify(userData));
+    } else {
+      sessionStorage.removeItem('user');
+    }
   };
 
   const login = async (email, password) => {

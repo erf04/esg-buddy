@@ -48,3 +48,28 @@ class OpenAIService:
 
         latest = messages.data[0]
         return latest.content[0].text.value
+    
+    async def stream_response(self, thread_id: str, content: str):
+        # Create user message
+        await self.client.beta.threads.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=content
+        )
+
+        # Create run with streaming enabled
+        stream = await self.client.beta.threads.runs.create(
+            thread_id=thread_id,
+            assistant_id=self.assistant_id,
+            stream=True
+        )
+
+        async for event in stream:
+            if event.event == "thread.message.delta":
+                if hasattr(event.data, 'delta') and hasattr(event.data.delta, 'content'):
+                    for content_block in event.data.delta.content:
+                        if content_block.type == "text" and hasattr(content_block.text, 'value'):
+                            yield content_block.text.value
+            elif event.event == "thread.run.completed":
+                break
+
