@@ -6,22 +6,15 @@ from db.models import User, Token
 from db.base import get_session
 from services.auth import hash_password, verify_password
 import secrets
+from schemas import auth as auth_schema
+from schemas.user import UserOut
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-class RegisterIn(BaseModel):
-    first_name: str
-    last_name: str
-    email: str
-    password: str
-
-class LoginIn(BaseModel):
-    email: str
-    password: str
 
 
 @router.post("/register")
-async def register(data: RegisterIn, db: AsyncSession = Depends(get_session)):
+async def register(data: auth_schema.RegisterIn, db: AsyncSession = Depends(get_session)):
     result = await db.execute(select(User).where(User.email == data.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -38,7 +31,7 @@ async def register(data: RegisterIn, db: AsyncSession = Depends(get_session)):
 
 
 @router.post("/login")
-async def login(data: LoginIn, db: AsyncSession = Depends(get_session)):
+async def login(data: auth_schema.LoginIn, db: AsyncSession = Depends(get_session)):
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
@@ -51,4 +44,6 @@ async def login(data: LoginIn, db: AsyncSession = Depends(get_session)):
     db.add(token)
     await db.commit()
 
-    return {"token": token_str,"user":{"id":user.id,"first_name":user.first_name}}
+    return auth_schema.LoginOut(token=token_str,user=UserOut.model_validate(user))
+
+    # return {"token": token_str,"user":{"id":user.id,"first_name":user.first_name}}

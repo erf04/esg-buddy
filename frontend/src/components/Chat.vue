@@ -130,8 +130,8 @@
               <div class="quick-starters">
                 <p class="quick-title">Try asking me:</p>
                 <div class="starter-buttons">
-                  <button class="starter-btn" @click="sendQuickQuestion('Explain artificial intelligence in simple terms')">
-                    🤖 Explain AI basics
+                  <button class="starter-btn" @click="sendQuickQuestion('Explain what is Cariboun AI and what do it do in simple terms')">
+                    🤖 What is Cariboun AI ?
                   </button>
                   <button class="starter-btn" @click="sendQuickQuestion('What are the benefits of sustainable technology?')">
                     🌱 Sustainability tips
