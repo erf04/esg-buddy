@@ -8,8 +8,14 @@ from db.models import Thread, User,Message
 from schemas.message import MessageIn, MessageOut
 from services.openai_service import OpenAIService
 from services.auth import get_current_user
+from services.pdf import markdown_to_pdf
 import json
 from fastapi.responses import StreamingResponse
+from datetime import datetime
+import io
+from services.pdf import html
+
+
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -145,3 +151,61 @@ async def get_messages(db: AsyncSession = Depends(get_session),
         {"role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
         for m in messages
     ]
+
+
+
+@router.get("/generate-esg-pdf")
+async def generate_esg_pdf(
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Simple endpoint to generate ESG PDF from conversation
+    """
+    try:
+        # 1. Get user's thread
+        result = await db.execute(
+            select(Thread).where(Thread.user_id == user.id).limit(1)
+        )
+        thread = result.scalar_one_or_none()
+        
+        if not thread:
+            raise HTTPException(status_code=400, detail="No conversation found. Please chat first.")
+        
+        # 2. Get ESG report text from AI
+        # report_text = await openai_service.generate_esg_report_text(thread.id)
+        
+        # 3. Convert text to PDF
+        # pdf_generator = SimplePDFGenerator()
+        # pdf_bytes = pdf_generator.text_to_pdf(report_text, "ESG Sustainability Report")
+        pdf_bytes = markdown_to_pdf(html)
+        # 4. Create a simple user message in chat
+        # user_msg = Message(
+        #     thread_id=thread.id,
+        #     role="user",
+        #     content="Generate ESG report"
+        # )
+        # db.add(user_msg)
+        
+        # 5. Create assistant message with PDF info
+        # filename = f"ESG_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        # assistant_msg = Message(
+        #     thread_id=thread.id,
+        #     role="assistant",
+        #     content=f"I've generated an ESG report based on our conversation. You can download it here."
+        # )
+        # db.add(assistant_msg)
+        # await db.commit()
+        
+        # 6. Return PDF as downloadable file
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=mmd",
+                "Content-Type": "application/pdf"
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")

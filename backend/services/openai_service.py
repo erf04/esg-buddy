@@ -73,3 +73,59 @@ class OpenAIService:
             elif event.event == "thread.run.completed":
                 break
 
+
+    async def generate_esg_report_text(self, thread_id: str) -> str:
+        """
+        Ask the AI to generate an ESG report as plain text
+        """
+        esg_prompt = """
+        Based on our conversation about the company, please generate a comprehensive 
+        ESG (Environmental, Social, Governance) report.
+        
+        Format it as a professional report with these sections:
+        
+        1. Executive Summary
+        2. Environmental Performance
+        3. Social Responsibility  
+        4. Governance Structure
+        5. Key Recommendations
+        6. Conclusion
+        
+        Make it detailed, data-driven, and actionable. Use markdown formatting for headings.
+        """
+        
+        # Send the prompt
+        await self.client.beta.threads.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=esg_prompt
+        )
+        
+        # Run the assistant
+        run = await self.client.beta.threads.runs.create(
+            thread_id=thread_id,
+            assistant_id=self.assistant_id
+        )
+        
+        # Wait for completion
+        while True:
+            run_status = await self.client.beta.threads.runs.retrieve(
+                thread_id=thread_id,
+                run_id=run.id
+            )
+            if run_status.status == "completed":
+                break
+            elif run_status.status == "failed":
+                raise Exception("ESG report generation failed")
+        
+        # Get the response
+        messages = await self.client.beta.threads.messages.list(
+            order="desc", limit=1, thread_id=thread_id
+        )
+        
+        if not messages.data:
+            raise Exception("No response from AI")
+        
+        latest = messages.data[0]
+        return latest.content[0].text.value
+

@@ -245,6 +245,23 @@
 
         <!-- Input Area -->
         <footer class="input-area">
+          <button 
+            v-if="messages.length > 0"
+            type="button"
+            class="pdf-btn"
+            @click="generateESGPDF"
+            :disabled="loading"
+            title="Generate ESG Report PDF"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span class="btn-text">ESG PDF</span>
+          </button>
           <form @submit.prevent="sendMessage" class="input-form">
             <div class="input-wrapper">
               <textarea
@@ -582,6 +599,75 @@ export default {
         sendMessage();
       });
     };
+
+    // In your Vue component methods
+  const generateESGPDF = async () => {
+    try {
+      loading.value = true;
+      
+      // Send request to generate PDF
+      const response = await fetch(`${API_BASE_URL}/chat/generate-esg-pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authStore.token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`PDF generation failed: ${response.status}`);
+      }
+      
+      // Get PDF blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ESG_Report_${new Date().toISOString().slice(0,10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      // Add message to chat
+      const userMessage = {
+        id: Date.now(),
+        role: 'user',
+        content: 'Generate ESG report',
+        timestamp: new Date().toISOString(),
+      };
+      messages.value.push(userMessage);
+      
+      const assistantMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: '✅ ESG report generated and downloaded!',
+        timestamp: new Date().toISOString(),
+        isStreaming: false,
+      };
+      messages.value.push(assistantMessage);
+      
+      scrollToBottom();
+      
+    } catch (error) {
+      console.error('Error generating ESG PDF:', error);
+      
+      // Add error message to chat
+      const errorMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: `Sorry, I couldn't generate the PDF: ${error.message}`,
+        timestamp: new Date().toISOString(),
+        isStreaming: false,
+      };
+      messages.value.push(errorMessage);
+      scrollToBottom();
+      
+    } finally {
+      loading.value = false;
+    }
+  };
     
     const copyToClipboard = async (text) => {
       try {
@@ -768,6 +854,7 @@ export default {
       sendQuickQuestion,
       copyToClipboard,
       regenerateResponse,
+      generateESGPDF,
       renderMarkdown,
       formatMessageTime,
       toggleDarkMode,
@@ -2332,5 +2419,39 @@ export default {
 
 .chat-wrapper.dark-mode .message-content-inner hr {
   border-color: #4b5563;
+}
+
+.pdf-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pdf-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.pdf-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-text {
+  font-size: 0.875rem;
 }
 </style>
