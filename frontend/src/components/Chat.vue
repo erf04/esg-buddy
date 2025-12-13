@@ -100,13 +100,30 @@
         <header class="chat-header">
           <div class="header-content">
             <h2>💬 Cariboun AI Assistant</h2>
-            <div class="header-status">
-              <div class="status-indicator" :class="{ online: isOnline }">
-                <div class="status-dot"></div>
-                <span>{{ isOnline ? 'Connected' : 'Offline' }}</span>
+            <div class="header-actions">
+              <button 
+                class="esg-report-btn"
+                @click="generateESGReport"
+                :disabled="!hasConversation || loading || streaming"
+                title="Generate ESG Report from Conversation"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span>Generate ESG Report</span>
+              </button>
+              <div class="header-status">
+                <div class="status-indicator" :class="{ online: isOnline }">
+                  <div class="status-dot"></div>
+                  <span>{{ isOnline ? 'Connected' : 'Offline' }}</span>
+                </div>
+                <div class="message-count">{{ messages.length }} messages</div>
               </div>
-              <div class="message-count">{{ messages.length }} messages</div>
-            </div>
+           </div>
           </div>
         </header>
 
@@ -195,6 +212,36 @@
                   <!-- Completed AI Message -->
                   <div v-else class="ai-message">
                     <div class="message-content-inner" v-html="renderMarkdown(message.content)"></div>
+
+                  <!-- PDF Attachment (if this message has a PDF) -->
+                  <div v-if="message.hasPdf" class="pdf-attachment">
+                    <div class="attachment-header">
+                      <div class="attachment-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                          <polyline points="7 10 12 15 17 10"></polyline>
+                          <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                      </div>
+                      <div class="attachment-info">
+                        <h4>📄 ESG Report Attached</h4>
+                        <p>Based on our conversation about your company</p>
+                      </div>
+                    </div>
+                    
+                    <div class="attachment-details">
+                      <div class="file-info">
+                        <span class="file-name">{{ message.pdfFilename }}</span>
+                        <span class="file-size">{{ formatFileSize(message.pdfSize) }}</span>
+                      </div>
+                      <button 
+                        class="download-btn"
+                        @click="downloadPDF(message.id, message.pdfFilename)"
+                      >
+                        Download PDF
+                      </button>
+                    </div>
+                  </div>
                     <!-- Message Actions -->
                     <div class="message-actions">
                       <button
@@ -245,7 +292,7 @@
 
         <!-- Input Area -->
         <footer class="input-area">
-          <button 
+          <!-- <button 
             v-if="messages.length > 0"
             type="button"
             class="pdf-btn"
@@ -261,7 +308,7 @@
               <polyline points="10 9 9 9 8 9"></polyline>
             </svg>
             <span class="btn-text">ESG PDF</span>
-          </button>
+          </button> -->
           <form @submit.prevent="sendMessage" class="input-form">
             <div class="input-wrapper">
               <textarea
@@ -277,6 +324,19 @@
               ></textarea>
               
               <div class="input-actions">
+                <!-- <button
+                  type="button"
+                  class="pdf-btn"
+                  @click="generateESGPDF"
+                  :disabled="loading || streaming || messages.length === 0"
+                  title="Generate ESG Report PDF"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                  </svg>
+                  <span class="btn-text">ESG PDF</span>
+                </button> -->
                 <button
                   v-if="streaming"
                   type="button"
@@ -373,48 +433,50 @@ export default {
       if (streaming.value) return 'Cariboun AI is responding...';
       return 'Type your message...';
     });
-    
+    const hasConversation = computed(() => {
+      return messages.value.length >= 2; // At least one user message and one assistant response
+    });
     // Methods
-    const loadMessagesFromBackend = async () => {
-      loadingMessages.value = true;
-      try {
-        const response = await fetch(`${API_BASE_URL}/chat/messages`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${authStore.token}`,
-          },
-        });
+    // const loadMessagesFromBackend = async () => {
+    //   loadingMessages.value = true;
+    //   try {
+    //     const response = await fetch(`${API_BASE_URL}/chat/messages`, {
+    //       method: 'GET',
+    //       headers: {
+    //         'Authorization': `Bearer ${authStore.token}`,
+    //       },
+    //     });
         
-        if (!response.ok) {
-          throw new Error(`Failed to load messages: ${response.status}`);
-        }
+    //     if (!response.ok) {
+    //       throw new Error(`Failed to load messages: ${response.status}`);
+    //     }
         
-        const data = await response.json();
+    //     const data = await response.json();
         
-        // Transform backend messages to frontend format
-        if (Array.isArray(data)) {
-          messages.value = data.map(msg => ({
-            id: msg.id || Date.now(),
-            role: msg.role || 'user',
-            content: msg.content || '',
-            timestamp: msg.created_at || new Date().toISOString(),
-            isStreaming: false,
-          }));
-        }
+    //     // Transform backend messages to frontend format
+    //     if (Array.isArray(data)) {
+    //       messages.value = data.map(msg => ({
+    //         id: msg.id || Date.now(),
+    //         role: msg.role || 'user',
+    //         content: msg.content || '',
+    //         timestamp: msg.created_at || new Date().toISOString(),
+    //         isStreaming: false,
+    //       }));
+    //     }
         
-      } catch (error) {
-        console.error('Error loading messages:', error);
-        // If no messages or error, show welcome message
-        if (messages.value.length === 0) {
-          messages.value = [];
-        }
-      } finally {
-        loadingMessages.value = false;
-        nextTick(() => {
-          scrollToBottom();
-        });
-      }
-    };
+    //   } catch (error) {
+    //     console.error('Error loading messages:', error);
+    //     // If no messages or error, show welcome message
+    //     if (messages.value.length === 0) {
+    //       messages.value = [];
+    //     }
+    //   } finally {
+    //     loadingMessages.value = false;
+    //     nextTick(() => {
+    //       scrollToBottom();
+    //     });
+    //   }
+    // };
     
     const sendMessage = async () => {
       if (!canSend.value) return;
@@ -600,74 +662,171 @@ export default {
       });
     };
 
-    // In your Vue component methods
-  const generateESGPDF = async () => {
-    try {
-      loading.value = true;
-      
-      // Send request to generate PDF
-      const response = await fetch(`${API_BASE_URL}/chat/generate-esg-pdf`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${authStore.token}`,
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`PDF generation failed: ${response.status}`);
+    const generateESGReport = async () => {
+      if (!hasConversation.value) {
+        alert("Please have a conversation with the assistant first to provide company information.");
+        return;
       }
       
-      // Get PDF blob
-      const blob = await response.blob();
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ESG_Report_${new Date().toISOString().slice(0,10)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      // Add message to chat
-      const userMessage = {
-        id: Date.now(),
-        role: 'user',
-        content: 'Generate ESG report',
-        timestamp: new Date().toISOString(),
-      };
-      messages.value.push(userMessage);
-      
-      const assistantMessage = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: '✅ ESG report generated and downloaded!',
-        timestamp: new Date().toISOString(),
-        isStreaming: false,
-      };
-      messages.value.push(assistantMessage);
-      
-      scrollToBottom();
-      
-    } catch (error) {
-      console.error('Error generating ESG PDF:', error);
-      
-      // Add error message to chat
-      const errorMessage = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: `Sorry, I couldn't generate the PDF: ${error.message}`,
-        timestamp: new Date().toISOString(),
-        isStreaming: false,
-      };
-      messages.value.push(errorMessage);
-      scrollToBottom();
-      
-    } finally {
-      loading.value = false;
-    }
-  };
+      try {
+        loading.value = true;
+        
+        // Show generating indicator
+        const generatingMsg = {
+          id: Date.now(),
+          role: 'assistant',
+          content: '🔍 Analyzing our conversation and generating ESG report...',
+          timestamp: new Date().toISOString(),
+          isStreaming: false,
+        };
+        messages.value.push(generatingMsg);
+        scrollToBottom();
+        
+        // Call backend to generate ESG report
+        const response = await fetch(`${API_BASE_URL}/chat/generate-esg-report`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${authStore.token}`,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to generate report: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Remove the "generating" message
+        messages.value.pop();
+        
+        // Add user's "generate report" message
+        const userMessage = {
+          id: Date.now(),
+          role: 'user',
+          content: 'Generate ESG report based on our conversation',
+          timestamp: new Date().toISOString(),
+        };
+        messages.value.push(userMessage);
+        
+        // Add assistant's response with PDF attachment
+        const assistantMessage = {
+          id: result.message_id,
+          role: 'assistant',
+          content: result.success 
+            ? "I've analyzed our conversation and created a comprehensive ESG report for you. The report includes all the information we discussed about your company's environmental, social, and governance practices."
+            : "Sorry, I couldn't generate the ESG report.",
+          timestamp: result.created_at,
+          hasPdf: result.has_pdf,
+          pdfFilename: result.pdf_filename,
+          pdfSize: result.pdf_size,
+        };
+        messages.value.push(assistantMessage);
+        
+        scrollToBottom();
+        
+        // Show success message
+        if (result.success) {
+          setTimeout(() => {
+            alert("✅ ESG report generated successfully! You can download it from the chat.");
+          }, 500);
+        }
+        
+      } catch (error) {
+        console.error('Error generating ESG report:', error);
+        
+        // Remove generating message if it exists
+        if (messages.value[messages.value.length - 1].content.includes('generating')) {
+          messages.value.pop();
+        }
+        
+        // Add error message
+        const errorMessage = {
+          id: Date.now() + 1,
+          role: 'assistant',
+          content: `Sorry, I encountered an error while generating the ESG report: ${error.message}`,
+          timestamp: new Date().toISOString(),
+          hasPdf: false,
+        };
+        messages.value.push(errorMessage);
+        scrollToBottom();
+        
+      } finally {
+        loading.value = false;
+      }
+    };
+    
+    const downloadPDF = async (messageId, filename) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/chat/download-pdf/${messageId}`, {
+          headers: {
+            'Authorization': `Bearer ${authStore.token}`,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to download PDF');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+      } catch (error) {
+        console.error('Error downloading PDF:', error);
+        alert('Failed to download PDF: ' + error.message);
+      }
+    };
+
+    const formatFileSize = (bytes) => {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+    
+    // Update loadMessagesFromBackend to include PDFs
+    const loadMessagesFromBackend = async () => {
+      loadingMessages.value = true;
+      try {
+        const response = await fetch(`${API_BASE_URL}/chat/messages`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${authStore.token}`,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to load messages: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Transform backend messages to include PDF info
+        messages.value = data.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.created_at,
+          isStreaming: false,
+          hasPdf: msg.has_pdf || false,
+          pdfFilename: msg.pdf_filename,
+          pdfSize: msg.pdf_size,
+        }));
+        
+      } catch (error) {
+        console.error('Error loading messages:', error);
+      } finally {
+        loadingMessages.value = false;
+        nextTick(() => scrollToBottom());
+      }
+    };
     
     const copyToClipboard = async (text) => {
       try {
@@ -848,13 +1007,16 @@ export default {
       getUserInitials,
       canSend,
       inputPlaceholder,
+      hasConversation,
       
       // Methods
       sendMessage,
       sendQuickQuestion,
       copyToClipboard,
       regenerateResponse,
-      generateESGPDF,
+      generateESGReport,
+      formatFileSize,
+      downloadPDF,
       renderMarkdown,
       formatMessageTime,
       toggleDarkMode,
@@ -2453,5 +2615,174 @@ export default {
 
 .btn-text {
   font-size: 0.875rem;
+}
+
+/* Header ESG Button */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.esg-report-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.esg-report-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.esg-report-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.esg-report-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* PDF Attachment Styles */
+.pdf-attachment {
+  margin-top: 1rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border-radius: 12px;
+  border: 1px solid #bbf7d0;
+}
+
+.chat-wrapper.dark-mode .pdf-attachment {
+  background: linear-gradient(135deg, #064e3b, #065f46);
+  border-color: #047857;
+}
+
+.attachment-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.attachment-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attachment-icon svg {
+  width: 24px;
+  height: 24px;
+  color: white;
+}
+
+.attachment-info h4 {
+  margin: 0 0 0.25rem 0;
+  color: #065f46;
+  font-size: 1.1rem;
+}
+
+.chat-wrapper.dark-mode .attachment-info h4 {
+  color: #a7f3d0;
+}
+
+.attachment-info p {
+  margin: 0;
+  color: #047857;
+  font-size: 0.875rem;
+}
+
+.chat-wrapper.dark-mode .attachment-info p {
+  color: #86efac;
+}
+
+.attachment-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(5, 150, 105, 0.2);
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.file-name {
+  font-weight: 600;
+  color: #111827;
+  font-size: 0.95rem;
+}
+
+.chat-wrapper.dark-mode .file-name {
+  color: #f3f4f6;
+}
+
+.file-size {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.chat-wrapper.dark-mode .file-size {
+  color: #9ca3af;
+}
+
+.download-btn {
+  padding: 0.5rem 1.5rem;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.download-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Loading indicator for PDF generation */
+.generating-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+}
+
+.chat-wrapper.dark-mode .generating-indicator {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+.generating-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 </style>

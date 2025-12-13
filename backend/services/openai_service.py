@@ -78,6 +78,13 @@ class OpenAIService:
         """
         Ask the AI to generate an ESG report as plain text
         """
+
+        # First, get the entire conversation context
+        messages = await self.client.beta.threads.messages.list(
+            thread_id=thread_id,
+            order="asc"
+        )
+        
         esg_prompt = """
         Based on our conversation about the company, please generate a comprehensive 
         ESG (Environmental, Social, Governance) report.

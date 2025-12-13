@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, ForeignKey, DateTime
+from sqlalchemy import Boolean, Column, Integer, LargeBinary, String, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from db.base import Base
@@ -43,6 +43,13 @@ class Message(Base):
     thread_id = Column(String, ForeignKey("threads.id"))
     role = Column(String)  # "user" or "assistant"
     content = Column(Text)
+
+    # PDF attachment fields
+    has_pdf = Column(Boolean, default=False)
+    pdf_filename = Column(String(255), nullable=True)
+    pdf_data = Column(LargeBinary, nullable=True)  # Store PDF as binary
+    pdf_size = Column(Integer, nullable=True)  # Size in bytes
+    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     thread = relationship("Thread", back_populates="messages")

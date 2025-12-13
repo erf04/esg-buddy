@@ -147,20 +147,37 @@ async def get_messages(db: AsyncSession = Depends(get_session),
     # 🔹 Order messages by time
     messages = sorted(thread.messages, key=lambda m: m.created_at)
 
-    return [
-        {"role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
-        for m in messages
-    ]
+    # Build response with PDF download URLs
+    response = []
+    for message in messages:
+        msg_dict = {
+            "id": message.id,
+            "role": message.role,
+            "content": message.content,
+            "created_at": message.created_at.isoformat(),
+            "has_pdf": message.has_pdf,
+        }
+        
+        if message.has_pdf:
+            msg_dict.update({
+                "pdf_filename": message.pdf_filename,
+                "pdf_size": message.pdf_size,
+                "pdf_download_url": f"/chat/download-pdf/{message.id}"
+            })
+        
+        response.append(msg_dict)
+    
+    return response
 
 
 
-@router.get("/generate-esg-pdf")
-async def generate_esg_pdf(
+@router.get("/generate-esg-report")
+async def generate_esg_report(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
     """
-    Simple endpoint to generate ESG PDF from conversation
+    Simple endpoint to generate ESG report from conversation
     """
     try:
         # 1. Get user's thread
@@ -173,12 +190,12 @@ async def generate_esg_pdf(
             raise HTTPException(status_code=400, detail="No conversation found. Please chat first.")
         
         # 2. Get ESG report text from AI
-        # report_text = await openai_service.generate_esg_report_text(thread.id)
+        report_text = await openai_service.generate_esg_report_text(thread.id)
         
         # 3. Convert text to PDF
         # pdf_generator = SimplePDFGenerator()
         # pdf_bytes = pdf_generator.text_to_pdf(report_text, "ESG Sustainability Report")
-        pdf_bytes = markdown_to_pdf(html)
+        pdf_bytes = markdown_to_pdf(report_text)
         # 4. Create a simple user message in chat
         # user_msg = Message(
         #     thread_id=thread.id,
@@ -188,7 +205,7 @@ async def generate_esg_pdf(
         # db.add(user_msg)
         
         # 5. Create assistant message with PDF info
-        # filename = f"ESG_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        filename = f"ESG_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         # assistant_msg = Message(
         #     thread_id=thread.id,
         #     role="assistant",
@@ -197,15 +214,85 @@ async def generate_esg_pdf(
         # db.add(assistant_msg)
         # await db.commit()
         
-        # 6. Return PDF as downloadable file
-        return StreamingResponse(
-            io.BytesIO(pdf_bytes),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=mmd",
-                "Content-Type": "application/pdf"
-            }
+        # 3. Save user's "Generate ESG Report" message
+        user_msg = Message(
+            thread_id=thread.id,
+            role="user",
+            content="Please generate an ESG report based on our conversation"
         )
+        db.add(user_msg)
+        
+        # 4. Save assistant's response WITH PDF attachment
+        assistant_msg = Message(
+            thread_id=thread.id,
+            role="assistant",
+            content="I've analyzed our conversation and generated an ESG report. You can download it below.",
+            has_pdf=True,
+            pdf_filename=filename,
+            pdf_data=pdf_bytes,
+            pdf_size=len(pdf_bytes)
+        )
+        db.add(assistant_msg)
+        
+        await db.commit()
+        await db.refresh(assistant_msg)
+        
+        # # 5. Also save the assistant's ESG report text as a regular message
+        # # (Optional: for conversation continuity)
+        # report_text_msg = Message(
+        #     thread_id=thread.id,
+        #     role="assistant",
+        #     content=f"## ESG Report Summary\n\n{report_text[:500]}... [Full report available as PDF]"
+        # )
+        # db.add(report_text_msg)
+        # await db.commit()
+        
+        # 6. Return success with message info
+        return {
+            "success": True,
+            "message": "ESG report generated successfully",
+            "message_id": assistant_msg.id,
+            "has_pdf": True,
+            "pdf_filename": filename,
+            "pdf_size": len(pdf_bytes),
+            "created_at": assistant_msg.created_at.isoformat()
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+
+
+
+@router.get("/download-pdf/{message_id}/")
+async def download_pdf(
+    message_id: str,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Download PDF attached to a message
+    """
+    # Get the message with PDF
+    result = await db.execute(
+        select(Message)
+        .join(Thread)
+        .where(
+            Message.id == message_id,
+            Thread.user_id == user.id,
+            Message.has_pdf == True
+        )
+    )
+    message = result.scalar_one_or_none()
+    
+    if not message or not message.pdf_data:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    
+    # Return PDF file
+    return StreamingResponse(
+        io.BytesIO(message.pdf_data),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={message.pdf_filename}",
+            "Content-Length": str(message.pdf_size)
+        }
+    )
