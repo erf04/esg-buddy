@@ -7,6 +7,63 @@
       <div class="bg-shape shape-3"></div>
       <div class="bg-shape shape-4"></div>
     </div>
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteModal" class="modal-overlay" @click="closeDeleteModal">
+      <div class="modal-container" @click.stop>
+        <div class="modal-header">
+          <div class="modal-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </div>
+          <h3 class="modal-title">Delete Conversation</h3>
+        </div>
+        
+        <div class="modal-content">
+          <p>Are you sure you want to delete this conversation? This action cannot be undone. All messages in this conversation will be permanently removed.</p>
+          
+          <div v-if="threadToDelete" class="thread-preview-modal">
+            <div class="preview-header">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>{{ threadToDelete.thread_title || 'Untitled Conversation' }}</span>
+            </div>
+            <div class="preview-details">
+              <span class="detail-item">{{ threadToDelete.message_count }} messages</span>
+              <span class="detail-item">{{ formatThreadTime(threadToDelete.created_at) }}</span>
+              <span v-if="threadToDelete.has_pdfs" class="detail-item pdf-indicator">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                Contains PDFs
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-actions">
+          <button class="modal-btn cancel-btn" @click="closeDeleteModal">
+            Cancel
+          </button>
+          <button class="modal-btn delete-btn" @click="confirmDeleteThread" :disabled="deletingThread">
+            <span v-if="deletingThread">
+              <svg class="spinner" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 6v6l4 2"></path>
+              </svg>
+              Deleting...
+            </span>
+            <span v-else>Delete Conversation</span>
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Main Chat Container -->
     <div class="chat-container">
@@ -139,7 +196,7 @@
                   <button 
                     v-if="currentThreadId === thread.thread_id"
                     class="thread-delete-btn"
-                    @click.stop="deleteThread(thread.thread_id)"
+                    @click.stop="openDeleteModal(thread)"
                     title="Delete conversation"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -507,6 +564,10 @@ export default {
     const copiedMessageIndex = ref(null);
     const copyTimeout = ref(null);
     const isHistoryCollapsed = ref(false);
+
+    const showDeleteModal = ref(false);
+    const threadToDelete = ref(null);
+    const deletingThread = ref(false);
     
     // Computed
     const getUserInitials = computed(() => {
@@ -544,12 +605,18 @@ export default {
     const fetchUserThreads = async () => {
       try {
         loadingThreads.value = true;
+        console.log("in loading");
+        console.log(API_BASE_URL);
+        
         const response = await fetch(`${API_BASE_URL}/threads`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${authStore.token}`,
           },
         });
+
+        console.log("afater response");
+        
         
         if (!response.ok) {
           throw new Error(`Failed to load threads: ${response.status}`);
@@ -1131,6 +1198,64 @@ export default {
       authStore.logout();
       router.push('/login');
     };
+
+    const openDeleteModal = (thread) => {
+      threadToDelete.value = thread;
+      showDeleteModal.value = true;
+    };
+
+    const closeDeleteModal = () => {
+      showDeleteModal.value = false;
+      threadToDelete.value = null;
+      deletingThread.value = false;
+    };
+
+    const confirmDeleteThread = async () => {
+      if (!threadToDelete.value) return;
+      
+      try {
+        deletingThread.value = true;
+        const threadId = threadToDelete.value.thread_id;
+        
+        const response = await fetch(`${API_BASE_URL}/threads/${threadId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${authStore.token}`,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to delete thread');
+        }
+        
+        // Remove from local list
+        threads.value = threads.value.filter(t => t.thread_id !== threadId);
+        
+        // If we deleted the current thread, load another one or clear
+        if (currentThreadId.value === threadId) {
+          if (threads.value.length > 0) {
+            await loadThreadMessages(threads.value[0].thread_id);
+          } else {
+            currentThreadId.value = null;
+            messages.value = [];
+            await createNewThread();
+          }
+        }
+        
+        // Close modal
+        closeDeleteModal();
+        
+        // Optional: Show success toast (if you have toast system)
+        // showSuccessToast('Conversation deleted successfully');
+        
+      } catch (error) {
+        console.error('Error deleting thread:', error);
+        // Optional: Show error toast
+        // showErrorToast('Failed to delete conversation');
+      } finally {
+        deletingThread.value = false;
+      }
+    };
     
     // Lifecycle
     onMounted(() => {
@@ -1196,6 +1321,9 @@ export default {
       hasConversation,
       hasPdfsInCurrentThread,
       pdfsInCurrentThread,
+      showDeleteModal,
+      threadToDelete,
+      deletingThread,
       sendMessage,
       sendQuickQuestion,
       copyToClipboard,
@@ -1215,6 +1343,9 @@ export default {
       cancelStream,
       logout,
       adjustTextareaHeight,
+      openDeleteModal,
+      closeDeleteModal,
+      confirmDeleteThread,
     };
   },
 };
@@ -3353,6 +3484,277 @@ export default {
   
   .hint-text {
     font-size: 0.625rem;
+  }
+}
+
+/* Delete Confirmation Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-container {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: modalSlideIn 0.3s ease-out;
+  overflow: hidden;
+}
+
+.chat-wrapper.dark-mode .modal-container {
+  background: #1f2937;
+  border: 1px solid #374151;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  padding: 24px 24px 16px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chat-wrapper.dark-mode .modal-header {
+  border-bottom-color: #374151;
+}
+
+.modal-icon {
+  width: 48px;
+  height: 48px;
+  background: #fef2f2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.chat-wrapper.dark-mode .modal-icon {
+  background: #7f1d1d;
+}
+
+.modal-icon svg {
+  width: 24px;
+  height: 24px;
+  color: #ef4444;
+}
+
+.chat-wrapper.dark-mode .modal-icon svg {
+  color: #fca5a5;
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.chat-wrapper.dark-mode .modal-title {
+  color: #f3f4f6;
+}
+
+.modal-content {
+  padding: 24px;
+}
+
+.modal-content p {
+  color: #6b7280;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+.chat-wrapper.dark-mode .modal-content p {
+  color: #9ca3af;
+}
+
+.thread-preview-modal {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.chat-wrapper.dark-mode .thread-preview-modal {
+  background: #374151;
+  border-color: #4b5563;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.preview-header svg {
+  width: 16px;
+  height: 16px;
+  color: #6b7280;
+}
+
+.chat-wrapper.dark-mode .preview-header svg {
+  color: #9ca3af;
+}
+
+.preview-header span {
+  font-weight: 500;
+  color: #111827;
+  font-size: 0.875rem;
+}
+
+.chat-wrapper.dark-mode .preview-header span {
+  color: #f3f4f6;
+}
+
+.preview-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.75rem;
+}
+
+.detail-item {
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-wrapper.dark-mode .detail-item {
+  color: #9ca3af;
+}
+
+.pdf-indicator {
+  color: #059669;
+  font-weight: 500;
+}
+
+.chat-wrapper.dark-mode .pdf-indicator {
+  color: #34d399;
+}
+
+.pdf-indicator svg {
+  width: 12px;
+  height: 12px;
+}
+
+.modal-actions {
+  padding: 16px 24px 24px;
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.chat-wrapper.dark-mode .modal-actions {
+  border-top-color: #374151;
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cancel-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.chat-wrapper.dark-mode .cancel-btn {
+  background: #374151;
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+
+.cancel-btn:hover {
+  background: #e5e7eb;
+}
+
+.chat-wrapper.dark-mode .cancel-btn:hover {
+  background: #4b5563;
+}
+
+.delete-btn {
+  background: #ef4444;
+  color: white;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.delete-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delete-btn .spinner {
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive Design for Modal */
+@media (max-width: 768px) {
+  .modal-container {
+    width: 95%;
+    max-width: 95%;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
   }
 }
 </style>
