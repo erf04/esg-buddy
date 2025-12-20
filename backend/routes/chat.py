@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, logger
+from fastapi import APIRouter, Depends, HTTPException, logger,Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -13,8 +13,8 @@ import json
 from fastapi.responses import StreamingResponse
 from datetime import datetime
 import io
-from services.pdf import html
-
+from typing import Optional
+from sqlalchemy import desc
 
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -22,45 +22,45 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 openai_service = OpenAIService()
 
-@router.post("/send-message")
-async def send_message(payload: MessageIn,
-                        db: AsyncSession = Depends(get_session),
-                        user: User = Depends(get_current_user)
-                        ):
-    # 🔹 Find or create user
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    print(payload.content)
-    if payload.content == None or payload.content.strip() == "":
-        raise HTTPException(status_code=400, detail="payload is not ok")
-    # 🔹 Find existing thread or create new one
-    result = await db.execute(
-        select(Thread).where(Thread.user_id == user.id).limit(1)
-    )
-    thread = result.scalar_one_or_none()
+# @router.post("/send-message")
+# async def send_message(payload: MessageIn,
+#                         db: AsyncSession = Depends(get_session),
+#                         user: User = Depends(get_current_user)
+#                         ):
+#     # 🔹 Find or create user
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     print(payload.content)
+#     if payload.content == None or payload.content.strip() == "":
+#         raise HTTPException(status_code=400, detail="payload is not ok")
+#     # 🔹 Find existing thread or create new one
+#     result = await db.execute(
+#         select(Thread).where(Thread.user_id == user.id).limit(1)
+#     )
+#     thread = result.scalar_one_or_none()
 
-    if not thread:
-        thread_id = await openai_service.create_thread()
-        thread = Thread(id=thread_id, user_id=user.id)
-        db.add(thread)
-        await db.commit()
-    else:
-        thread_id = thread.id
+#     if not thread:
+#         thread_id = await openai_service.create_thread()
+#         thread = Thread(id=thread_id, user_id=user.id)
+#         db.add(thread)
+#         await db.commit()
+#     else:
+#         thread_id = thread.id
 
-    # 🔹 Save user message
-    user_msg = Message(thread_id=thread_id, role="user", content=payload.content)
-    db.add(user_msg)
-    await db.commit()
+#     # 🔹 Save user message
+#     user_msg = Message(thread_id=thread_id, role="user", content=payload.content)
+#     db.add(user_msg)
+#     await db.commit()
 
-    # 🔹 Get response from assistant
-    reply_text = await openai_service.send_message(thread_id, payload.content)
+#     # 🔹 Get response from assistant
+#     reply_text = await openai_service.send_message(thread_id, payload.content)
 
-    # 🔹 Save assistant message
-    assistant_msg = Message(thread_id=thread_id, role="assistant", content=reply_text)
-    db.add(assistant_msg)
-    await db.commit()
-    # return {}
-    return MessageOut(role="assistant", content=reply_text, thread_id=thread_id, created_at=assistant_msg.created_at.isoformat())
+#     # 🔹 Save assistant message
+#     assistant_msg = Message(thread_id=thread_id, role="assistant", content=reply_text)
+#     db.add(assistant_msg)
+#     await db.commit()
+#     # return {}
+#     return MessageOut(role="assistant", content=reply_text, thread_id=thread_id, created_at=assistant_msg.created_at.isoformat())
 
 
 @router.post("/stream")
@@ -73,20 +73,35 @@ async def stream_message(payload: MessageIn,
 
     if not payload.content or payload.content.strip() == "":
         raise HTTPException(status_code=400, detail="Message content cannot be empty")
-
-    # Find or create thread
-    result = await db.execute(
-        select(Thread).where(Thread.user_id == user.id).limit(1)
-    )
-    thread = result.scalar_one_or_none()
-
-    if not thread:
-        thread_id = await openai_service.create_thread()
-        thread = Thread(id=thread_id, user_id=user.id)
-        db.add(thread)
-        await db.commit()
-    else:
+    
+    thread_id = payload.thread_id
+    # If thread_id is provided, use it, otherwise find existing thread
+    if thread_id:
+        # Verify the thread belongs to the user
+        result = await db.execute(
+            select(Thread).where(Thread.id == thread_id, Thread.user_id == user.id)
+        )
+        thread = result.scalar_one_or_none()
+        
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
         thread_id = thread.id
+    else:
+        # Find or create thread
+        result = await db.execute(
+            select(Thread).where(Thread.user_id == user.id)
+            .order_by(desc(Thread.created_at))
+            .limit(1)
+        )
+        thread = result.scalar_one_or_none()
+
+        if not thread:
+            thread_id = await openai_service.create_thread()
+            thread = Thread(id=thread_id, user_id=user.id)
+            db.add(thread)
+            await db.commit()
+        else:
+            thread_id = thread.id
 
     # Save user message
     user_msg = Message(thread_id=thread_id, role="user", content=payload.content)
@@ -102,6 +117,7 @@ async def stream_message(payload: MessageIn,
                     full_response += token
                     yield f"data: {json.dumps({'delta': token})}\n\n"
             
+            # print("full response : ",len(full_response))
             # Save assistant response to database
             if full_response:
                 assistant_msg = Message(
@@ -130,49 +146,108 @@ async def stream_message(payload: MessageIn,
     )
 
 
-@router.get("/messages/")
-async def get_messages(db: AsyncSession = Depends(get_session),
-                       user:User = Depends(get_current_user)):
-    # 🔹 Find user and load messages with thread relationship
-    result = await db.execute(
-        select(Thread)
-        .options(selectinload(Thread.messages))
-        .where(Thread.user_id == user.id)
-    )
-    thread = result.scalar_one_or_none()
+# @router.get("/messages/")
+# async def get_messages(db: AsyncSession = Depends(get_session),
+#                        user:User = Depends(get_current_user)):
+#     # 🔹 Find user and load messages with thread relationship
+#     result = await db.execute(
+#         select(Thread)
+#         .options(selectinload(Thread.messages))
+#         .where(Thread.user_id == user.id)
+#     )
+#     thread = result.scalar_one_or_none()
 
-    if not thread:
-        raise HTTPException(status_code=404, detail="No thread found for this user")
+#     if not thread:
+#         raise HTTPException(status_code=404, detail="No thread found for this user")
 
-    # 🔹 Order messages by time
-    messages = sorted(thread.messages, key=lambda m: m.created_at)
+#     # 🔹 Order messages by time
+#     messages = sorted(thread.messages, key=lambda m: m.created_at)
 
-    # Build response with PDF download URLs
-    response = []
-    for message in messages:
-        msg_dict = {
-            "id": message.id,
-            "role": message.role,
-            "content": message.content,
-            "created_at": message.created_at.isoformat(),
-            "has_pdf": message.has_pdf,
+#     # Build response with PDF download URLs
+#     response = []
+#     for message in messages:
+#         msg_dict = {
+#             "id": message.id,
+#             "role": message.role,
+#             "content": message.content,
+#             "created_at": message.created_at.isoformat(),
+#             "has_pdf": message.has_pdf,
+#         }
+        
+#         if message.has_pdf:
+#             msg_dict.update({
+#                 "pdf_filename": message.pdf_filename,
+#                 "pdf_size": message.pdf_size,
+#                 "pdf_download_url": f"/chat/download-pdf/{message.id}"
+#             })
+        
+#         response.append(msg_dict)
+    
+#     return response
+
+
+@router.get("/{thread_id}/messages")
+async def get_thread_messages(
+    thread_id: str,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Get all messages for a specific thread
+    """
+    try:
+        # Verify the thread belongs to the user
+        result = await db.execute(
+            select(Thread)
+            .where(Thread.id == thread_id, Thread.user_id == user.id)
+            .options(selectinload(Thread.messages))
+        )
+        thread = result.scalar_one_or_none()
+        
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        
+        # Sort messages by creation time
+        messages = sorted(thread.messages, key=lambda m: m.created_at)
+        
+        # Format response
+        formatted_messages = []
+        for message in messages:
+            msg_dict = {
+                "id": message.id,
+                "role": message.role,
+                "content": message.content,
+                "created_at": message.created_at.isoformat(),
+                "has_pdf": message.has_pdf,
+            }
+            
+            if message.has_pdf:
+                msg_dict.update({
+                    "pdf_filename": message.pdf_filename,
+                    "pdf_size": message.pdf_size,
+                    "pdf_download_url": f"/chat/download-pdf/{message.id}"
+                })
+            
+            formatted_messages.append(msg_dict)
+        
+        # Get thread info
+        has_pdfs = any(msg.has_pdf for msg in thread.messages)
+        
+        return {
+            "thread_id": thread.id,
+            "created_at": thread.created_at.isoformat(),
+            "message_count": len(messages),
+            "has_pdfs": has_pdfs,
+            "messages": formatted_messages
         }
         
-        if message.has_pdf:
-            msg_dict.update({
-                "pdf_filename": message.pdf_filename,
-                "pdf_size": message.pdf_size,
-                "pdf_download_url": f"/chat/download-pdf/{message.id}"
-            })
-        
-        response.append(msg_dict)
-    
-    return response
-
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch thread messages: {str(e)}")
 
 
 @router.get("/generate-esg-report")
 async def generate_esg_report(
+    thread_id: str,
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
@@ -182,7 +257,7 @@ async def generate_esg_report(
     try:
         # 1. Get user's thread
         result = await db.execute(
-            select(Thread).where(Thread.user_id == user.id).limit(1)
+            select(Thread).where(Thread.id == thread_id)
         )
         thread = result.scalar_one_or_none()
         
@@ -191,7 +266,7 @@ async def generate_esg_report(
         
         # 2. Get ESG report text from AI
         report_text = await openai_service.generate_esg_report_text(thread.id)
-        
+        print(report_text)
         # 3. Convert text to PDF
         # pdf_generator = SimplePDFGenerator()
         # pdf_bytes = pdf_generator.text_to_pdf(report_text, "ESG Sustainability Report")

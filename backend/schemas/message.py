@@ -6,6 +6,7 @@ from datetime import datetime
 # Pydantic schema
 class MessageIn(BaseModel):
     content: str
+    thread_id:Optional[str]
 
 class MessageOut(BaseModel):
     id: int

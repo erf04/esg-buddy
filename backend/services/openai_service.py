@@ -1,6 +1,10 @@
 import os
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -75,64 +79,81 @@ class OpenAIService:
 
 
     async def generate_esg_report_text(self, thread_id: str) -> str:
-        """
-        Ask the AI to generate an ESG report as plain text
-        """
+        logger.debug("Starting ESG report generation | thread_id=%s", thread_id)
 
-        # First, get the entire conversation context
+        # 1. List existing messages
         messages = await self.client.beta.threads.messages.list(
             thread_id=thread_id,
             order="asc"
         )
-        
+        logger.debug("Existing messages count: %d", len(messages.data))
+
         esg_prompt = """
         Based on our conversation about the company, please generate a comprehensive 
-        ESG (Environmental, Social, Governance) report.
-        
-        Format it as a professional report with these sections:
-        
-        1. Executive Summary
-        2. Environmental Performance
-        3. Social Responsibility  
-        4. Governance Structure
-        5. Key Recommendations
-        6. Conclusion
-        
-        Make it detailed, data-driven, and actionable. Use markdown formatting for headings.
+        ESG report.
         """
-        
-        # Send the prompt
+
+        # 2. Send prompt
+        logger.debug("Sending ESG prompt to thread")
         await self.client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
             content=esg_prompt
         )
-        
-        # Run the assistant
+
+        # 3. Run assistant
         run = await self.client.beta.threads.runs.create(
             thread_id=thread_id,
-            assistant_id=self.assistant_id
+            assistant_id=self.assistant_id,
         )
-        
-        # Wait for completion
+        logger.debug("Run created | run_id=%s", run.id)
+
+        # 4. Poll status (WITH sleep)
         while True:
             run_status = await self.client.beta.threads.runs.retrieve(
                 thread_id=thread_id,
                 run_id=run.id
             )
+
+            logger.debug(
+                "Run status | run_id=%s | status=%s",
+                run.id,
+                run_status.status
+            )
+
             if run_status.status == "completed":
                 break
-            elif run_status.status == "failed":
-                raise Exception("ESG report generation failed")
-        
-        # Get the response
+
+            if run_status.status == "failed":
+                error = run_status.last_error
+                logger.error(
+                    "Run failed | code=%s | message=%s",
+                    getattr(error, "code", None),
+                    getattr(error, "message", None),
+                )
+                raise RuntimeError(
+                    f"ESG generation failed: {error.code} - {error.message}"
+                )
+
+            await asyncio.sleep(0.8)  # VERY IMPORTANT
+
+        # 5. Fetch latest assistant message
         messages = await self.client.beta.threads.messages.list(
-            order="desc", limit=1, thread_id=thread_id
+            thread_id=thread_id,
+            order="desc",
+            limit=5
         )
-        
-        if not messages.data:
-            raise Exception("No response from AI")
-        
-        latest = messages.data[0]
-        return latest.content[0].text.value
+
+        logger.debug("Fetched %d messages after completion", len(messages.data))
+
+        # 6. Find the assistant response safely
+        for msg in messages.data:
+            if msg.role == "assistant":
+                for block in msg.content:
+                    if block.type == "text":
+                        logger.debug("Assistant response found")
+                        return block.text.value
+
+        logger.error("No assistant text response found")
+        raise RuntimeError("No valid text response from assistant")
 

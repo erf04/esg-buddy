@@ -6,6 +6,7 @@ from routes.chat import router as chat_router
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
+from routes.thread import router as thread_router
 
 
 
@@ -35,7 +36,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(thread_router)
 
 
-if __name__ == "__main__":
-    uvicorn.run("main:app",host="0.0.0.0",port=8000,reload=True)
+# if __name__ == "__main__":
+#     uvicorn.run("main:app",host="0.0.0.0",port=8000,reload=True,log_level="trace")
