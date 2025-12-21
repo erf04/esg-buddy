@@ -568,6 +568,9 @@ export default {
     const showDeleteModal = ref(false);
     const threadToDelete = ref(null);
     const deletingThread = ref(false);
+
+    const toasts = ref([]);
+    const toastId = ref(0);
     
     // Computed
     const getUserInitials = computed(() => {
@@ -785,6 +788,7 @@ export default {
       await fetchUserThreads();
     };
     
+    // Update the streamResponse method to handle new error format
     const streamResponse = async (content) => {
       loading.value = true;
       streaming.value = true;
@@ -831,6 +835,8 @@ export default {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let hasContent = false;
+        let rateLimitDetected = false;
         
         try {
           while (true) {
@@ -854,6 +860,12 @@ export default {
                 
                 if (dataStr === '[DONE]') {
                   assistantMessage.isStreaming = false;
+                  
+                  // Check if we got any content
+                  if (!hasContent && assistantMessage.content.trim() === '' && !rateLimitDetected) {
+                    handleRateLimitError({ type: 'empty_response', message: 'Empty response from assistant' });
+                  }
+                  
                   break;
                 }
                 
@@ -861,17 +873,36 @@ export default {
                   const data = JSON.parse(dataStr);
                   
                   if (data.delta) {
+                    hasContent = true;
                     assistantMessage.content += data.delta;
                     messages.value = [...messages.value];
                   }
                   
                   if (data.error) {
-                    throw new Error(data.error);
+                    // Handle rate limit error from backend
+                    if (data.type === 'rate_limit') {
+                      rateLimitDetected = true;
+                      handleRateLimitError({ type: 'rate_limit', message: data.error });
+                      assistantMessage.content = "⚠️ This conversation has reached its token limit. Please start a new conversation to continue.";
+                      assistantMessage.isStreaming = false;
+                      break;
+                    } else if (data.type === 'empty_response') {
+                      handleRateLimitError({ type: 'empty_response', message: data.error });
+                      assistantMessage.content = "⚠️ The assistant returned an empty response. Please start a new conversation.";
+                      assistantMessage.isStreaming = false;
+                      break;
+                    } else {
+                      throw new Error(data.error);
+                    }
                   }
                 } catch (parseError) {
                   console.error('Error parsing SSE data:', parseError);
                 }
               }
+            }
+            
+            if (rateLimitDetected) {
+              break;
             }
           }
         } finally {
@@ -884,7 +915,11 @@ export default {
       } catch (error) {
         console.error('Streaming error:', error);
         
-        if (error.name === 'AbortError') {
+        // Handle rate limit errors
+        if (handleRateLimitError(error)) {
+          // Don't show technical error for rate limits
+          assistantMessage.content = "⚠️ This conversation has reached its token limit. Please start a new conversation to continue.";
+        } else if (error.name === 'AbortError') {
           console.log('Stream cancelled by user');
           assistantMessage.content += '\n\n[Response interrupted]';
         } else {
@@ -969,7 +1004,21 @@ export default {
         });
         
         if (!response.ok) {
-          throw new Error(`Failed to generate report: ${response.status}`);
+          const errorText = await response.text();
+          
+          // Check for rate limit
+          if (response.status === 429 || errorText.includes('token limit') || errorText.includes('rate_limit')) {
+            handleRateLimitError({ message: errorText });
+            throw new Error('rate_limit_exceeded');
+          }
+          
+          // Check for empty response
+          if (errorText.includes('Empty response') || errorText.includes('too long')) {
+            handleRateLimitError({ type: 'empty_response', message: errorText });
+            throw new Error('empty_response');
+          }
+          
+          throw new Error(`Failed to generate report: ${response.status} - ${errorText}`);
         }
         
         const result = await response.json();
@@ -1005,12 +1054,6 @@ export default {
         // Refresh threads to update PDF indicator
         await fetchUserThreads();
         
-        // Show success message
-        if (result.success) {
-          setTimeout(() => {
-            alert("✅ ESG report generated successfully! You can download it from the chat.");
-          }, 500);
-        }
         
       } catch (error) {
         console.error('Error generating ESG report:', error);
@@ -1020,15 +1063,39 @@ export default {
           messages.value.pop();
         }
         
-        // Add error message
-        const errorMessage = {
-          id: Date.now() + 1,
-          role: 'assistant',
-          content: `Sorry, I encountered an error while generating the ESG report: ${error.message}`,
-          timestamp: new Date().toISOString(),
-          hasPdf: false,
-        };
-        messages.value.push(errorMessage);
+        // Handle rate limit (toast already shown by handleRateLimitError)
+        if (error.message === 'rate_limit_exceeded') {
+          // Rate limit toast already shown, add informative message to chat
+          const rateLimitMessage = {
+            id: Date.now() + 1,
+            role: 'assistant',
+            content: "⚠️ This conversation has reached its token limit and I cannot generate the ESG report. Please start a new conversation and try again.",
+            timestamp: new Date().toISOString(),
+            hasPdf: false,
+          };
+          messages.value.push(rateLimitMessage);
+        } else if (error.message === 'empty_response') {
+          // Empty response
+          const emptyResponseMessage = {
+            id: Date.now() + 1,
+            role: 'assistant',
+            content: "⚠️ The assistant returned an empty response. Please start a new conversation and try again.",
+            timestamp: new Date().toISOString(),
+            hasPdf: false,
+          };
+          messages.value.push(emptyResponseMessage);
+        } else {
+          // Regular error
+          const errorMessage = {
+            id: Date.now() + 1,
+            role: 'assistant',
+            content: `Sorry, I encountered an error while generating the ESG report: ${error.message}`,
+            timestamp: new Date().toISOString(),
+            hasPdf: false,
+          };
+          messages.value.push(errorMessage);
+        }
+        
         scrollToBottom();
         
       } finally {
@@ -1256,6 +1323,39 @@ export default {
         deletingThread.value = false;
       }
     };
+
+
+    // Update the handleRateLimitError function
+    const handleRateLimitError = (error) => {
+      console.error('Error detected:', error);
+      
+      // Check if this is a rate limit error from backend
+      if (error.message?.includes('rate_limit_exceeded') || 
+          error.message?.includes('rate limit') || 
+          error.message?.includes('Request too large') ||
+          error.message?.includes('TPM') ||
+          error.message?.includes('Limit') ||
+          error.message?.includes('Requested') ||
+          error.message?.includes('token limit') ||
+          error.type === 'rate_limit') {
+        
+        return true;
+      }
+      
+      // Check for empty responses
+      if (error.message?.includes('No response found') || 
+          error.message?.includes('empty response') ||
+          error.message?.includes('Empty response') ||
+          error === 'empty_response' ||
+          error.type === 'empty_response') {
+        
+        return true;
+      }
+      
+      return false;
+    };
+
+
     
     // Lifecycle
     onMounted(() => {
@@ -1346,6 +1446,7 @@ export default {
       openDeleteModal,
       closeDeleteModal,
       confirmDeleteThread,
+      handleRateLimitError
     };
   },
 };

@@ -1,14 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, logger,Body
+from fastapi import APIRouter, Depends, HTTPException, logger, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-
-from db.base import get_session
-from db.models import Thread, User,Message
-from schemas.message import MessageIn, MessageOut
-from services.openai_service import OpenAIService
-from services.auth import get_current_user
-from services.pdf import markdown_to_pdf
 import json
 from fastapi.responses import StreamingResponse
 from datetime import datetime
@@ -16,52 +9,20 @@ import io
 from typing import Optional
 from sqlalchemy import desc
 
+from db.base import get_session
+from db.models import Thread, User, Message
+from schemas.message import MessageIn, MessageOut
+from services.openai_service import OpenAIService
+from services.auth import get_current_user
+from services.pdf import markdown_to_pdf
+import logging 
+
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
-
 openai_service = OpenAIService()
 
-# @router.post("/send-message")
-# async def send_message(payload: MessageIn,
-#                         db: AsyncSession = Depends(get_session),
-#                         user: User = Depends(get_current_user)
-#                         ):
-#     # 🔹 Find or create user
-#     if not user:
-#         raise HTTPException(status_code=404, detail="User not found")
-#     print(payload.content)
-#     if payload.content == None or payload.content.strip() == "":
-#         raise HTTPException(status_code=400, detail="payload is not ok")
-#     # 🔹 Find existing thread or create new one
-#     result = await db.execute(
-#         select(Thread).where(Thread.user_id == user.id).limit(1)
-#     )
-#     thread = result.scalar_one_or_none()
-
-#     if not thread:
-#         thread_id = await openai_service.create_thread()
-#         thread = Thread(id=thread_id, user_id=user.id)
-#         db.add(thread)
-#         await db.commit()
-#     else:
-#         thread_id = thread.id
-
-#     # 🔹 Save user message
-#     user_msg = Message(thread_id=thread_id, role="user", content=payload.content)
-#     db.add(user_msg)
-#     await db.commit()
-
-#     # 🔹 Get response from assistant
-#     reply_text = await openai_service.send_message(thread_id, payload.content)
-
-#     # 🔹 Save assistant message
-#     assistant_msg = Message(thread_id=thread_id, role="assistant", content=reply_text)
-#     db.add(assistant_msg)
-#     await db.commit()
-#     # return {}
-#     return MessageOut(role="assistant", content=reply_text, thread_id=thread_id, created_at=assistant_msg.created_at.isoformat())
-
+logger = logging.getLogger(__name__)
 
 @router.post("/stream")
 async def stream_message(payload: MessageIn,
@@ -111,15 +72,28 @@ async def stream_message(payload: MessageIn,
     async def event_generator():
         try:
             full_response = ""
+            rate_limit_detected = False
+            empty_response = True
+            
             async for token in openai_service.stream_response(thread_id, payload.content):
                 if token:
-                    # print("Streaming token:", token)
-                    full_response += token
-                    yield f"data: {json.dumps({'delta': token})}\n\n"
+                    # Check for rate limit error in token
+                    if token.startswith("[RATE_LIMIT_ERROR]"):
+                        rate_limit_detected = True
+                        error_msg = token.replace("[RATE_LIMIT_ERROR]", "").strip()
+                        yield f"data: {json.dumps({'error': error_msg, 'type': 'rate_limit'})}\n\n"
+                        break
+                    elif token.startswith("[ERROR]"):
+                        error_msg = token.replace("[ERROR]", "").strip()
+                        yield f"data: {json.dumps({'error': error_msg, 'type': 'general'})}\n\n"
+                        break
+                    else:
+                        empty_response = False
+                        full_response += token
+                        yield f"data: {json.dumps({'delta': token})}\n\n"
             
-            # print("full response : ",len(full_response))
-            # Save assistant response to database
-            if full_response:
+            # Save assistant response to database if we got content
+            if full_response and not rate_limit_detected:
                 assistant_msg = Message(
                     thread_id=thread_id, 
                     role="assistant", 
@@ -127,12 +101,23 @@ async def stream_message(payload: MessageIn,
                 )
                 db.add(assistant_msg)
                 await db.commit()
-                
+            
+            # Check for empty response
+            if empty_response and not rate_limit_detected:
+                yield f"data: {json.dumps({'error': 'Empty response from assistant', 'type': 'empty_response'})}\n\n"
+            
             yield f"data: {json.dumps({'done': True})}\n\n"
             
         except Exception as e:
-            logger.error(f"Streaming error: {str(e)}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            error_str = str(e)
+            logger.error(f"Streaming error: {error_str}")
+            
+            # Check for rate limit in error
+            if "rate_limit" in error_str.lower() or "429" in error_str:
+                yield f"data: {json.dumps({'error': error_str, 'type': 'rate_limit'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'error': error_str, 'type': 'general'})}\n\n"
+            
             yield f"data: {json.dumps({'done': True})}\n\n"
 
     return StreamingResponse(
@@ -141,49 +126,9 @@ async def stream_message(payload: MessageIn,
         headers={
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no'  # Important for nginx
+            'X-Accel-Buffering': 'no'
         }
     )
-
-
-# @router.get("/messages/")
-# async def get_messages(db: AsyncSession = Depends(get_session),
-#                        user:User = Depends(get_current_user)):
-#     # 🔹 Find user and load messages with thread relationship
-#     result = await db.execute(
-#         select(Thread)
-#         .options(selectinload(Thread.messages))
-#         .where(Thread.user_id == user.id)
-#     )
-#     thread = result.scalar_one_or_none()
-
-#     if not thread:
-#         raise HTTPException(status_code=404, detail="No thread found for this user")
-
-#     # 🔹 Order messages by time
-#     messages = sorted(thread.messages, key=lambda m: m.created_at)
-
-#     # Build response with PDF download URLs
-#     response = []
-#     for message in messages:
-#         msg_dict = {
-#             "id": message.id,
-#             "role": message.role,
-#             "content": message.content,
-#             "created_at": message.created_at.isoformat(),
-#             "has_pdf": message.has_pdf,
-#         }
-        
-#         if message.has_pdf:
-#             msg_dict.update({
-#                 "pdf_filename": message.pdf_filename,
-#                 "pdf_size": message.pdf_size,
-#                 "pdf_download_url": f"/chat/download-pdf/{message.id}"
-#             })
-        
-#         response.append(msg_dict)
-    
-#     return response
 
 
 @router.get("/{thread_id}/messages")
@@ -257,7 +202,7 @@ async def generate_esg_report(
     try:
         # 1. Get user's thread
         result = await db.execute(
-            select(Thread).where(Thread.id == thread_id)
+            select(Thread).where(Thread.id == thread_id, Thread.user_id == user.id)
         )
         thread = result.scalar_one_or_none()
         
@@ -265,31 +210,33 @@ async def generate_esg_report(
             raise HTTPException(status_code=400, detail="No conversation found. Please chat first.")
         
         # 2. Get ESG report text from AI
-        report_text = await openai_service.generate_esg_report_text(thread.id)
-        print(report_text)
+        try:
+            report_text = await openai_service.generate_esg_report_text(thread.id)
+            
+            # Check for empty response
+            if not report_text or report_text.strip() == "":
+                raise HTTPException(status_code=400, detail="Empty response from AI. This conversation may be too long.")
+                
+        except Exception as e:
+            error_str = str(e)
+            logger.error(f"Error in ESG report generation: {error_str}")
+            
+            # Check for rate limit
+            if "rate_limit" in error_str.lower():
+                raise HTTPException(
+                    status_code=429,
+                    detail="This conversation has reached its token limit. Please start a new conversation to continue."
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to generate ESG report: {error_str}"
+                )
+        
         # 3. Convert text to PDF
-        # pdf_generator = SimplePDFGenerator()
-        # pdf_bytes = pdf_generator.text_to_pdf(report_text, "ESG Sustainability Report")
         pdf_bytes = markdown_to_pdf(report_text)
-        # 4. Create a simple user message in chat
-        # user_msg = Message(
-        #     thread_id=thread.id,
-        #     role="user",
-        #     content="Generate ESG report"
-        # )
-        # db.add(user_msg)
         
-        # 5. Create assistant message with PDF info
-        filename = f"ESG_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        # assistant_msg = Message(
-        #     thread_id=thread.id,
-        #     role="assistant",
-        #     content=f"I've generated an ESG report based on our conversation. You can download it here."
-        # )
-        # db.add(assistant_msg)
-        # await db.commit()
-        
-        # 3. Save user's "Generate ESG Report" message
+        # 4. Save user's "Generate ESG Report" message
         user_msg = Message(
             thread_id=thread.id,
             role="user",
@@ -297,7 +244,8 @@ async def generate_esg_report(
         )
         db.add(user_msg)
         
-        # 4. Save assistant's response WITH PDF attachment
+        # 5. Save assistant's response WITH PDF attachment
+        filename = f"ESG_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         assistant_msg = Message(
             thread_id=thread.id,
             role="assistant",
@@ -312,16 +260,6 @@ async def generate_esg_report(
         await db.commit()
         await db.refresh(assistant_msg)
         
-        # # 5. Also save the assistant's ESG report text as a regular message
-        # # (Optional: for conversation continuity)
-        # report_text_msg = Message(
-        #     thread_id=thread.id,
-        #     role="assistant",
-        #     content=f"## ESG Report Summary\n\n{report_text[:500]}... [Full report available as PDF]"
-        # )
-        # db.add(report_text_msg)
-        # await db.commit()
-        
         # 6. Return success with message info
         return {
             "success": True,
@@ -333,9 +271,12 @@ async def generate_esg_report(
             "created_at": assistant_msg.created_at.isoformat()
         }
         
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
-
+        logger.error(f"Failed to generate ESG report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate ESG report: {str(e)}")
 
 
 @router.get("/download-pdf/{message_id}/")
