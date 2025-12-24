@@ -127,8 +127,7 @@ class OpenAIService:
             logger.debug("Existing messages count: %d", len(messages.data))
 
             esg_prompt = """
-            Based on our conversation about the company, please generate a comprehensive 
-            ESG report.
+                Generate the full ESG report
             """
 
             # 2. Send prompt
