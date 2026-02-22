@@ -1,5 +1,7 @@
 services:
   backend:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # This maps host.docker.internal to your host
     image: "${REGISTRY}/backend:${IMAGE_TAG}"
     ports:
       - "5000:8000"
