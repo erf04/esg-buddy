@@ -32,9 +32,13 @@ jobs:
       # 4️⃣ Build & Push with Bake
       - name: Build & Push Images
         uses: docker/bake-action@v5
-        env:
-            REGISTRY: ghcr.io/${{ github.repository_owner }}
-            IMAGE_TAG: ${{ github.sha }}
+        with:
+          push: true  # This must be true to push images
+          set: |
+            backend.tags=ghcr.io/${{ github.repository_owner }}/backend:${{ github.sha }}
+            frontend.tags=ghcr.io/${{ github.repository_owner }}/frontend:${{ github.sha }}
+        # OR use targets approach:
+          targets: backend,frontend
 
       # 5️⃣ Copy compose file to VPS
       - name: Copy docker-compose.prod.yml to VPS
