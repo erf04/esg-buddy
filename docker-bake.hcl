@@ -1,4 +1,4 @@
-variable "Registry" {
+variable "REGISTRY" {
     default = "ghcr.io/erf04"
 }
 
@@ -10,17 +10,17 @@ variable "IMAGE_TAG" {
 target "backend" {
     context = "./backend"
     dockerfile = "Dockerfile"
-    tags = [ "${ Registry }/backend:${IMAGE_TAG}" ]
-    cache-from = ["type=registry,ref=${Registry}/backend:cache"]
-    cache-to   = ["type=registry,ref=${Registry}/backend:cache,mode=max"]
+    tags = [ "${ REGISTRY }/backend:${IMAGE_TAG}" ]
+    cache-from = ["type=registry,ref=${REGISTRY}/backend:cache"]
+    cache-to   = ["type=registry,ref=${REGISTRY}/backend:cache,mode=max"]
 }
 
 target "frontend" {
     context = "./frontend"
     dockerfile = "Dockerfile"
-    tags = [ "${ Registry }/frontend:${IMAGE_TAG}" ]
-    cache-from = ["type=registry,ref=${Registry}/frontend:cache"]
-    cache-to   = ["type=registry,ref=${Registry}/frontend:cache,mode=max"]
+    tags = [ "${ REGISTRY }/frontend:${IMAGE_TAG}" ]
+    cache-from = ["type=registry,ref=${REGISTRY}/frontend:cache"]
+    cache-to   = ["type=registry,ref=${REGISTRY}/frontend:cache,mode=max"]
 }
 
 group "default" {

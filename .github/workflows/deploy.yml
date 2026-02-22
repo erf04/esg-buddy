@@ -1,0 +1,69 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # 1️⃣ Checkout repo
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2️⃣ Setup Buildx
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3️⃣ Login to GHCR
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 4️⃣ Build & Push with Bake
+      - name: Build & Push Images
+        uses: docker/bake-action@v4
+        with:
+          push: true
+          set: |
+            *.REGISTRY=ghcr.io/${{ github.repository_owner }}
+            *.IMAGE_TAG=${{ github.sha }}
+
+      # 5️⃣ Copy compose file to VPS
+      - name: Copy docker-compose.prod.yml to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "~/${{ secrets.SERVER_USER }}/app"
+
+      # 6️⃣ Deploy on VPS
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd ~/${{ secrets.SERVER_USER }}/app
+
+            # login to GHCR (only needed first time, safe to keep)
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # export tag so compose can use it
+            export IMAGE_TAG=${{ github.sha }}
+            export POSTGRES_PASS=${{secrets.POSTGRES_PASS}}
+            echo "${{secrets.POSTGRES_PASS}}" > .env
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
