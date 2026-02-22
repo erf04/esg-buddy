@@ -35,8 +35,8 @@ jobs:
         with:
           push: true
           set: |
-            *.REGISTRY=ghcr.io/${{ github.repository_owner }}
-            *.IMAGE_TAG=${{ github.sha }}
+            *.vars.REGISTRY=ghcr.io/${{ github.repository_owner }}
+            *.vars.IMAGE_TAG=${{ github.sha }}
 
       # 5️⃣ Copy compose file to VPS
       - name: Copy docker-compose.prod.yml to VPS
