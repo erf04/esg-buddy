@@ -1,7 +1,19 @@
 services:
+
+  postgres:
+    image: postgres:15
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: esgbuddy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+    ports:
+      - "5432:5432" 
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   backend:
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # This maps host.docker.internal to your host
     image: "${REGISTRY}/backend:${IMAGE_TAG}"
     ports:
       - "5000:8000"
@@ -9,7 +21,7 @@ services:
       DB_NAME: esgbuddy
       DB_USER: postgres
       DB_PASSWORD: ${POSTGRES_PASS}
-      DB_HOST: host.docker.internal
+      DB_HOST: postgres
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_ASSISTANT_ID: ${OPENAI_ASSISTANT_ID}
 
