@@ -64,6 +64,6 @@ jobs:
             # export tag so compose can use it
             export IMAGE_TAG=${{ github.sha }}
             export POSTGRES_PASS=${{secrets.POSTGRES_PASS}}
-            echo "${{secrets.POSTGRES_PASS}}" > .env
+            export REGISTRY="ghcr.io/${{ github.repository_owner }}"
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
