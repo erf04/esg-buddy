@@ -1,0 +1,25 @@
+services:
+  backend:
+    image: "${Registry}/backend:${IMAGE_TAG}"
+    ports:
+      - "5000:8000"
+    environment:
+      DB_NAME: esgbuddy
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASS}
+      DB_HOST: host.docker.internal
+
+    container_name: fastapi
+
+
+  frontend:
+    image: "${Registry}/frontend:${IMAGE_TAG}"
+    ports:
+      - "80:80"
+    container_name: nginx_front
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_BASE_URL=http://backend:8000
+
+    

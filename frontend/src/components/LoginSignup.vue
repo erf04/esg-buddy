@@ -150,9 +150,9 @@
           </div>
 
           <!-- Forgot Password for Login -->
-          <div v-if="isLogin" class="forgot-password">
+          <!-- <div v-if="isLogin" class="forgot-password">
             <a href="#" class="forgot-link">Forgot Password?</a>
-          </div>
+          </div> -->
 
           <!-- Submit Button -->
           <button 

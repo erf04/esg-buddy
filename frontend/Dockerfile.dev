@@ -1,0 +1,22 @@
+FROM docker.arvancloud.ir/node:22-alpine AS Install
+
+WORKDIR /app
+
+COPY package*.json .
+
+RUN npm i
+
+FROM docker.arvancloud.ir/node:22-alpine AS Build
+
+WORKDIR /app
+COPY --from=Install /app/node_modules ./node_modules
+COPY --from=Install /app/package*.json ./
+COPY . .
+RUN npm run build
+
+FROM docker.arvancloud.ir/nginx:alpine AS Serve
+
+COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+
+COPY --from=Build /app/dist /usr/share/nginx/html
+
