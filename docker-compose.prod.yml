@@ -38,4 +38,6 @@ services:
     environment:
       - VITE_API_BASE_URL=http://backend:8000
 
-    
+volumes:
+  postgres_data:  
+    driver: local
