@@ -8,6 +8,8 @@ services:
       DB_USER: postgres
       DB_PASSWORD: ${POSTGRES_PASS}
       DB_HOST: host.docker.internal
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_ASSISTANT_ID: ${OPENAI_ASSISTANT_ID}
 
     container_name: fastapi
 
