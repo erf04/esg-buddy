@@ -611,7 +611,7 @@ export default {
         console.log("in loading");
         console.log(API_BASE_URL);
         
-        const response = await fetch(`${API_BASE_URL}/threads`, {
+        const response = await fetch(`${API_BASE_URL}/threads/`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${authStore.token}`,
@@ -648,7 +648,7 @@ export default {
         messages.value = [];
         currentThreadId.value = threadId;
         
-        const response = await fetch(`${API_BASE_URL}/chat/${threadId}/messages`, {
+        const response = await fetch(`${API_BASE_URL}/chat/${threadId}/messages/`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${authStore.token}`,
@@ -692,7 +692,7 @@ export default {
     const createNewThread = async () => {
       try {
         loading.value = true;
-        const response = await fetch(`${API_BASE_URL}/threads/new`, {
+        const response = await fetch(`${API_BASE_URL}/threads/new/`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${authStore.token}`,
@@ -732,7 +732,7 @@ export default {
       }
       
       try {
-        const response = await fetch(`${API_BASE_URL}/threads/${threadId}`, {
+        const response = await fetch(`${API_BASE_URL}/threads/${threadId}/`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${authStore.token}`,

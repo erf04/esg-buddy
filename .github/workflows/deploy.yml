@@ -69,5 +69,8 @@ jobs:
             export REGISTRY="ghcr.io/${{ github.repository_owner }}"
             export OPENAI_API_KEY=${{secrets.OPENAI_API_KEY}}
             export OPENAI_ASSISTANT_ID=${{secrets.OPENAI_ASSISTANT_ID}}
+            cd frontend/
+            echo "/api" > .env
+            cd ..
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans

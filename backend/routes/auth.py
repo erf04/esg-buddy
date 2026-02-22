@@ -13,7 +13,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 
-@router.post("/register")
+@router.post("/register/")
 async def register(data: auth_schema.RegisterIn, db: AsyncSession = Depends(get_session)):
     result = await db.execute(select(User).where(User.email == data.email))
     if result.scalar_one_or_none():
@@ -30,7 +30,7 @@ async def register(data: auth_schema.RegisterIn, db: AsyncSession = Depends(get_
     return {"message": "User registered successfully"}
 
 
-@router.post("/login")
+@router.post("/login/")
 async def login(data: auth_schema.LoginIn, db: AsyncSession = Depends(get_session)):
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()

@@ -131,7 +131,7 @@ async def stream_message(payload: MessageIn,
     )
 
 
-@router.get("/{thread_id}/messages")
+@router.get("/{thread_id}/messages/")
 async def get_thread_messages(
     thread_id: str,
     db: AsyncSession = Depends(get_session),

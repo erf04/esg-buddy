@@ -68,7 +68,7 @@ async def get_user_threads(
     
 
 
-@router.post("/new")
+@router.post("/new/")
 async def create_new_thread(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
@@ -98,7 +98,7 @@ async def create_new_thread(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create new thread: {str(e)}")
 
-@router.delete("/{thread_id}")
+@router.delete("/{thread_id}/")
 async def delete_thread(
     thread_id: str,
     db: AsyncSession = Depends(get_session),
