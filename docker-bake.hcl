@@ -3,13 +3,13 @@ variable "REGISTRY" {
 }
 
 variable "IMAGE_TAG" {
-    default = "latest"
 }
 
 
 target "backend" {
     context = "./backend"
     dockerfile = "Dockerfile"
+
     tags = [ "${ REGISTRY }/backend:${IMAGE_TAG}" ]
     cache-from = ["type=registry,ref=${REGISTRY}/backend:cache"]
     cache-to   = ["type=registry,ref=${REGISTRY}/backend:cache,mode=max"]
