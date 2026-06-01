@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     # e.g., closing resources
 
 
-app = FastAPI(title="ESG Buddy Backend with ORM",lifespan=lifespan)
+app = FastAPI(title="ESG Buddy Backend with ORM",lifespan=lifespan,root_path="/api")
 
 
 app.add_middleware(
