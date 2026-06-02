@@ -52,8 +52,8 @@ Before you begin, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/cariboun-ai.git
-cd cariboun-ai
+git clone https://github.com/erf04/esg-buddy.git
+cd esg-buddy
 ```
 
 ### 2. Backend Setup
@@ -78,14 +78,12 @@ Create a `.env` file in the backend directory:
 
 ```env
 # Database
-DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/cariboun_ai
+DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/esgbuddy
 
 # OpenAI
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_ASSISTANT_ID=your_assistant_id_here
 
-# CORS
-FRONTEND_URL=http://localhost:5173
 ```
 
 #### Database Setup
@@ -94,7 +92,7 @@ FRONTEND_URL=http://localhost:5173
 # Create PostgreSQL database
 createdb cariboun_ai
 
-# Run migrations (if using Alembic)
+# Run migrations 
 alembic upgrade head
 
 # Or create tables directly
@@ -104,10 +102,10 @@ python -m db.init_db
 #### Start Backend Server
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python main.py
 ```
 
-The backend will be available at `http://localhost:8000`
+The backend will be available at `http://0.0.0.0:8000`
 
 ### 3. Frontend Setup
 
@@ -206,17 +204,6 @@ cariboun-ai/
 
 ## 🛠️ Development
 
-### Running Tests
-
-```bash
-# Backend tests
-cd backend
-pytest tests/
-
-# Frontend tests
-cd frontend
-npm run test
-```
 
 ### Building for Production
 
@@ -231,19 +218,7 @@ cd frontend
 npm run build
 ```
 
-### Docker Deployment
 
-```dockerfile
-# Dockerfile for backend
-FROM python:3.9-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
 
 ## 🔍 API Documentation
 
@@ -344,17 +319,7 @@ graph TD
    - Check CORS settings in backend
    - Ensure both servers are running
 
-### Debug Mode
 
-```bash
-# Backend debug
-cd backend
-DEBUG=1 uvicorn main:app --reload
-
-# Frontend debug
-cd frontend
-npm run dev -- --debug
-```
 
 ## 🔒 Security Considerations
 
@@ -384,17 +349,7 @@ npm run dev -- --debug
 4. Push to the branch
 5. Create a Pull Request
 
-### Code Style
 
-```bash
-# Backend
-black .  # Python formatting
-isort .  # Import sorting
-
-# Frontend
-npm run lint  # ESLint
-npm run format  # Prettier
-```
 
 ## 🙏 Acknowledgments
 
@@ -407,7 +362,7 @@ npm run format  # Prettier
 For issues and questions:
 - Open a GitHub Issue
 - Check the Wiki for documentation
-- Email: erfank20041382@gmail.com
+- Email: erfan.ka.004@gmail.com
 
 ---
 
