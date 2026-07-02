@@ -1,4 +1,18 @@
 services:
+
+  postgres:
+    image: postgres:15
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: esgbuddy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+    ports:
+      - "5432:5432" 
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   backend:
     build:
       context: ./backend
@@ -9,8 +23,13 @@ services:
       DB_NAME: esgbuddy
       DB_USER: postgres
       DB_PASSWORD: ${POSTGRES_PASS}
-      DB_HOST: host.docker.internal
+      DB_HOST: postgres
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_ASSISTANT_ID: ${OPENAI_ASSISTANT_ID}
+      # DB_HOST: host.docker.internal
 
+    depends_on:
+      - postgres
     container_name: fastapi
 
 
@@ -19,7 +38,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     ports:
-      - "800:80"
+      - "80:80"
     container_name: nginx_front
     depends_on:
       - backend
