@@ -45,3 +45,6 @@ services:
     environment:
       VITE_API_BASE_URL: /api
     
+
+volumes:
+  postgres_data:  
