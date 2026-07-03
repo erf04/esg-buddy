@@ -1,7 +1,7 @@
 services:
 
   postgres:
-    image: postgres:15
+    image: docker.arvancloud.ir/postgres:15
     container_name: postgres_db
     restart: unless-stopped
     environment:
@@ -26,6 +26,7 @@ services:
       DB_HOST: postgres
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_ASSISTANT_ID: ${OPENAI_ASSISTANT_ID}
+      DATABASE_URL: ${DATABASE_URL}
       # DB_HOST: host.docker.internal
 
     depends_on:
