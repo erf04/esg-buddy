@@ -52,85 +52,70 @@ Before you begin, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/erf04/esg-buddy.git
-cd esg-buddy
+git clone https://github.com/erf04/CaribounAI.git
+cd CaribounAI
 ```
 
-### 2. Backend Setup
+### 2. Environment Setup
 
-#### Create Virtual Environment
-
+1. Copy the .env.example file to the .env file should look like this:
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+cp .env.example .env
 ```
 
-#### Install Dependencies
-
-```bash
-pip install -r requirements.txt
+the .env file in project root:
+```
+OPENAI_API_KEY=<your_openai_api_key>
+OPENAI_ASSISTANT_ID=<your_assistant_id>
+DATABASE_URL=postgresql+asyncpg://<POSTGRES_USER>:<POSTGRES_PASS>@<POSTGRES_HOST>:<POSTGRES_PORT>/esgbuddy
+POSTGRES_PASS=<your_secure_password>
+```
+then paste your values for the corresponding keys
+2. in the frontend directory , create a .env file :
+```
+touch frontend/.env
+```
+and set VITE_API_BASE_URL variable in it :
+```
+VITE_API_BASE_URL=/api
 ```
 
-#### Configure Environment Variables
-
-Create a `.env` file in the backend directory:
-
-```env
-# Database
-DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/esgbuddy
-
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_ASSISTANT_ID=your_assistant_id_here
-
+### 3. Project Structure
+```
+project/
+├── backend/          # FastAPI application
+├── frontend/         # Vue.js application
+    ├── src/  
+    ├── nginx/
+    ├── .env
+    ...              
+├── docker-compose.dev.yml
+├── docker-compose.prod.yml
+├── docker-bake.hcl
+├── .env
+└── .env.example
 ```
 
-#### Database Setup
+### 4. Deploy Application
 
-```bash
-# Create PostgreSQL database
-createdb cariboun_ai
-
-# Run migrations 
-alembic upgrade head
-
-# Or create tables directly
-python -m db.init_db
+`notice` : because of github CI/CD disabled , We use docker-compose.dev.yml to dockerize the project for now that requires the whole source code . if the CI/CD is up and working , use docker-compose.prod.yml only (doesn't need to deploy the source code on the server).
+```
+# Build and start all services
+docker compose -f docker-compose.dev.yml up --build -d
+# Verify services are running(you should see backend , frontend and postgres services up and running)
+docker compose -f docker-compose.dev.yml ps
 ```
 
-#### Start Backend Server
 
-```bash
-python main.py
-```
+### 5. Access Application
 
-The backend will be available at `http://0.0.0.0:8000`
+ - Frontend: http://your_server_ip:80
 
-### 3. Frontend Setup
+ - Backend API: http://your_server_ip:8000
 
-#### Install Dependencies
+ - API Docs: http://your_server_ip:8000/docs
 
-```bash
-cd frontend
-npm install
-```
-
-#### Configure Environment Variables
-
-Create a `.env` file in the frontend directory:
-
-```env
-VITE_API_BASE_URL=http://localhost:8000
-```
-
-#### Start Development Server
-
-```bash
-npm run dev
-```
-
-The frontend will be available at `http://localhost:5173`
+ - Database: your_server_ip:5432
 
 ## 🔧 Detailed Configuration
 
